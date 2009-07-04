@@ -1,0 +1,2 @@
+UKSoundFileRecorder 0.1.1
+This is a Cocoa class that uses CoreAudio to record sound from the system's default sound input and writes it to a file.
