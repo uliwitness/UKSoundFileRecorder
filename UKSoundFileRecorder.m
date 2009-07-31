@@ -144,7 +144,7 @@ OSStatus AudioInputProc( void* inRefCon, AudioUnitRenderActionFlags* ioActionFla
 	err = AudioUnitRender( afr->audioUnit, ioActionFlags, inTimeStamp,
 							inBusNumber, inNumberFrames, afr->audioBuffer);
 	if( err )
-		fprintf( stderr, "AudioUnitRender() failed with error %i\n", err );
+		fprintf( stderr, "AudioUnitRender() failed with error %ld\n", err );
 	
 	// Write to file, ExtAudioFile auto-magicly handles conversion/encoding
 	// NOTE: Async writes may not be flushed to disk until a the file
@@ -155,7 +155,7 @@ OSStatus AudioInputProc( void* inRefCon, AudioUnitRenderActionFlags* ioActionFla
 		char	formatID[5] = { 0 };
 		*(UInt32 *)formatID = CFSwapInt32HostToBig(err);
 		formatID[4] = '\0';
-		fprintf(stderr, "ExtAudioFileWrite FAILED! %d '%-4.4s'\n",err, formatID);
+		fprintf(stderr, "ExtAudioFileWrite FAILED! %ld '%-4.4s'\n",err, formatID);
 		return err;
 	}
 	
