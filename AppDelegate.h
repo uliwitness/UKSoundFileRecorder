@@ -15,6 +15,7 @@
 	IBOutlet UKSoundFileRecorder*		recorder;
 	IBOutlet NSTextField*				pathField;
 	IBOutlet NSTextField*				statusField;
+	IBOutlet NSTextField*				levelField;
 }
 
 @end

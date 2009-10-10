@@ -27,6 +27,11 @@
 	[statusField setStringValue: [NSString stringWithFormat: @"%ld Seconds...", lroundf(timeInSeconds)]];
 }
 
+-(void)	soundFileRecorder: (UKSoundFileRecorder*)sender hasAmplitude: (float)level
+{
+	[levelField setStringValue: [NSString stringWithFormat: @"%f", level]];
+}
+
 -(void)	soundFileRecorderWasStopped: (UKSoundFileRecorder*)sender
 {
 	[statusField setStringValue: @"Ready."];
