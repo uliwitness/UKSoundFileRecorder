@@ -119,6 +119,7 @@
 {
 	delegate = dele;	// Don't retain delegate, it's very likely our owner. Wouldn't want a retain circle!
 	delegateWantsTimeChanges = (delegate && [delegate respondsToSelector: @selector(soundFileRecorder:reachedDuration:)]);
+	delegateWantsLevels = (delegate && [delegate respondsToSelector: @selector(soundFileRecorder:hasAmplitude:)]);
 }
 
 
@@ -162,18 +163,44 @@ OSStatus AudioInputProc( void* inRefCon, AudioUnitRenderActionFlags* ioActionFla
 	UInt64	nanos = AudioConvertHostTimeToNanos( inTimeStamp->mHostTime -afr->startHostTime );
 	afr->currSeconds = ((double)nanos) * 0.000000001;
 	
-	if( afr->delegateWantsTimeChanges )	// Don't waste time syncing to other threads if nobody is listening:
-		[afr performSelectorOnMainThread: @selector(notifyDelegateOfTimeChange) withObject: nil waitUntilDone: NO];
+	float amps[2] = { -1, -1 };
+	if( afr->delegateWantsTimeChanges && afr->canDoMetering )
+	{
+		err = AudioUnitGetParameter( afr->audioUnit, kMatrixMixerParam_PostAveragePower, kAudioUnitScope_Input, 0, &amps [0]);
+		if( err != noErr )
+		{
+			fprintf( stderr, "Couldn't get average power (%ld).\n", err );
+			return err;
+		}
+		
+		err = AudioUnitGetParameter( afr->audioUnit, kMatrixMixerParam_PostPeakHoldLevel, kAudioUnitScope_Input, 0, &amps [1]);
+		if( err != noErr )
+		{
+			fprintf( stderr, "Couldn't get peak power (%ld).\n", err );
+			return err;
+		}
+	
+//		currAmps = amps[0];
+//		peakAmps = amps[1];
+	}
+	
+	if( afr->delegateWantsTimeChanges || afr->delegateWantsLevels )	// Don't waste time syncing to other threads if nobody is listening:
+		[afr performSelectorOnMainThread: @selector(notifyDelegateOfTimeChange:) withObject: [NSNumber numberWithFloat: amps[0]] waitUntilDone: NO];
 	
 	return err;
 }
 
 
 // Used by our AudioInputProc to easily call this delegate method from another thread:
--(void)	notifyDelegateOfTimeChange
+-(void)	notifyDelegateOfTimeChange: (NSNumber*)currentAmps
 {
 	if( isRecording )	// In case we queued one up but were already finished by the time it got executed.
-		[delegate soundFileRecorder: self reachedDuration: currSeconds];
+	{
+		if( delegateWantsTimeChanges )
+			[delegate soundFileRecorder: self reachedDuration: currSeconds];
+		if( delegateWantsLevels )
+			[delegate soundFileRecorder: self hasAmplitude: [currentAmps floatValue]];
+	}
 }
 
 
@@ -456,6 +483,7 @@ OSStatus AudioInputProc( void* inRefCon, AudioUnitRenderActionFlags* ioActionFla
 		CloseComponent( audioUnit );
 		audioUnit = NULL;
 	}
+	canDoMetering = NO;
 	
 	// Open the AudioOutputUnit
 	// There are several different types of Audio Units.
@@ -495,6 +523,12 @@ OSStatus AudioInputProc( void* inRefCon, AudioUnitRenderActionFlags* ioActionFla
 			[self cleanUp];
 			return [NSString stringWithFormat: @"Couldn't set EnableIO property on the audio unit (ID=%d)", err];
 		}
+		else
+		{
+			err = AudioUnitSetProperty( audioUnit, kAudioUnitProperty_MeteringMode, kAudioUnitScope_Input, 1, &param, sizeof(UInt32) );
+			canDoMetering = (err == noErr);
+		}
+
 	}
 
 	// Select the default input device

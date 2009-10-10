@@ -52,6 +52,8 @@
 	
 	id							delegate;
 	BOOL						delegateWantsTimeChanges;
+	BOOL						delegateWantsLevels;
+	BOOL						canDoMetering;
 }
 
 +(NSDictionary*)	defaultOutputFormat;
@@ -109,6 +111,9 @@
 
 // Sent while we're recording:
 -(void)	soundFileRecorder: (UKSoundFileRecorder*)sender reachedDuration: (NSTimeInterval)timeInSeconds;
+
+// This is for level meters:
+-(void)	soundFileRecorder: (UKSoundFileRecorder*)sender hasAmplitude: (float)theLevel;
 
 // Sent after a successful stop:
 -(void)	soundFileRecorderWasStopped: (UKSoundFileRecorder*)sender;
