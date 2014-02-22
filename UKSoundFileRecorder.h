@@ -67,6 +67,7 @@
 	AudioStreamBasicDescription	actualOutputFormat;
 	AudioStreamBasicDescription	deviceFormat;
 	NSDictionary*				outputFormat;
+	NSDictionary*				actualOutputFormatDict;
 	double						currSeconds;
 	UInt64						startHostTime;
 	
@@ -90,6 +91,7 @@
 
 -(void)				setOutputFormat: (NSDictionary*)inASBD;		// Keys for this dictionary can be found in UKAudioStreamBasicDescription.h and below.
 -(NSDictionary*)	outputFormat;
+-(NSDictionary*)	actualOutputFormat;
 
 -(void)								setDelegate: (id<UKSoundFileRecorderDelegate>)dele;
 -(id<UKSoundFileRecorderDelegate>)	delegate;

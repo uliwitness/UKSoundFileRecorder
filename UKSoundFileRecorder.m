@@ -31,6 +31,7 @@
 
 #import "UKSoundFileRecorder.h"
 #import "NSString+CarbonUtilities.h"
+#import "UKHelperMacros.h"
 #import <sys/param.h>	// for MAX().
 
 
@@ -122,11 +123,10 @@
 	NS_ENDHANDLER
 	[self destroyAudioBufferList: audioBuffer];
 	
-	[outputFilePath release];
-	outputFilePath = nil;
+	DESTROY_DEALLOC(outputFilePath);
 	
-	[outputFormat release];
-	outputFormat = nil;
+	DESTROY_DEALLOC(actualOutputFormatDict);
+	DESTROY_DEALLOC(outputFormat);
 	
 	[super dealloc];
 }
@@ -159,6 +159,7 @@
 
 OSStatus AudioInputProc( void* inRefCon, AudioUnitRenderActionFlags* ioActionFlags, const AudioTimeStamp* inTimeStamp, UInt32 inBusNumber, UInt32 inNumberFrames, AudioBufferList* ioData)
 {
+	NSAutoreleasePool	*	pool = [[NSAutoreleasePool alloc] init];
 	UKSoundFileRecorder *	afr = (UKSoundFileRecorder*)inRefCon;
 	OSStatus				err = noErr;
 
@@ -280,6 +281,14 @@ OSStatus AudioInputProc( void* inRefCon, AudioUnitRenderActionFlags* ioActionFla
 -(NSDictionary*)	outputFormat
 {
 	return outputFormat;
+}
+
+
+-(NSDictionary*)	actualOutputFormat
+{
+	if( !actualOutputFormatDict )
+		ASSIGN(actualOutputFormatDict, UKDictionaryFromAudioStreamDescription( &actualOutputFormat ) );
+	return actualOutputFormatDict;
 }
 
 
