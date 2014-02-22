@@ -851,7 +851,7 @@ cleanUp:
 	actualOutputFormat.mFormatID = kAudioFormatLinearPCM;
 	actualOutputFormat.mFormatFlags = kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked | kAudioFormatFlagIsNonInterleaved;
 	
-	NSLog( @"sampleRate %f", actualOutputFormat.mSampleRate );
+	//NSLog( @"sampleRate %f", actualOutputFormat.mSampleRate );
 	
 	if( actualOutputFormat.mFormatID == kAudioFormatLinearPCM && audioChannels == 1 )
 		actualOutputFormat.mFormatFlags &= ~kLinearPCMFormatFlagIsNonInterleaved;
