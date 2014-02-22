@@ -35,6 +35,27 @@
 #import <sys/param.h>	// for MAX().
 
 
+
+NSString	*	UKSoundFileRecorderDeviceUID = @"UKSoundFileRecorderDeviceUID";
+NSString	*	UKSoundFileRecorderDeviceName = @"UKSoundFileRecorderDeviceName";
+NSString	*	UKSoundFileRecorderDeviceManufacturer = @"UKSoundFileRecorderDeviceManufacturer";
+
+NSString	*	UKSoundFileRecorderAvailableInputDevicesChangedNotification = @"UKSoundFileRecorderAvailableInputDevicesChanged";
+
+
+static BOOL		sDidSubscribeForDeviceChanges = NO;
+
+
+static OSStatus AudioInputProc( void* inRefCon, AudioUnitRenderActionFlags* ioActionFlags, const AudioTimeStamp* inTimeStamp, UInt32 inBusNumber, UInt32 inNumberFrames, AudioBufferList* ioData);
+static OSStatus	UKSoundFileRecorderAudioDeviceListChanged( AudioHardwarePropertyID inPropertyID, void* inClientData );
+
+
+static int32_t	UKInt32FromOSStatus( OSStatus inErr )
+{
+	return (int32_t)inErr;
+}
+
+
 // -----------------------------------------------------------------------------
 //	Private method prototypes:
 // -----------------------------------------------------------------------------
@@ -46,6 +67,7 @@
 -(NSString*)		configureAU;		// Returns error string, NIL on success.
 -(AudioBufferList*)	allocateAudioBufferListWithNumChannels: (UInt32)numChannels size: (UInt32)size;
 -(void)				destroyAudioBufferList: (AudioBufferList*)list;
+-(void)				notifyDelegateOfTimeChange: (NSNumber*)currentAmps;
 
 @end
 
@@ -74,6 +96,124 @@
 	}
 	
 	return sDict;
+}
+
+
++(NSArray*)		availableInputDevices
+{
+	NSMutableArray	*	names = [NSMutableArray array];
+	
+	AudioObjectPropertyAddress propertyAddress = {
+													kAudioHardwarePropertyDevices,
+													kAudioObjectPropertyScopeGlobal,
+													kAudioObjectPropertyElementMaster
+												};
+	
+	UInt32 dataSize = 0;
+	OSStatus status = AudioObjectGetPropertyDataSize(kAudioObjectSystemObject, &propertyAddress, 0, NULL, &dataSize);
+	if(kAudioHardwareNoError != status)
+		return nil;
+	
+	UInt32 deviceCount = (UInt32)(dataSize / sizeof(AudioDeviceID));
+	
+	AudioDeviceID *audioDevices = (AudioDeviceID *) malloc(dataSize);
+	if(NULL == audioDevices)
+		return nil;
+	
+	status = AudioObjectGetPropertyData(kAudioObjectSystemObject, &propertyAddress, 0, NULL, &dataSize, audioDevices);
+	if(kAudioHardwareNoError != status)
+	{
+		free(audioDevices), audioDevices = NULL;
+		return NULL;
+	}
+		
+	// Iterate through all the devices and determine which are input-capable
+	propertyAddress.mScope = kAudioDevicePropertyScopeInput;
+	for( UInt32 i = 0; i < deviceCount; ++i )
+	{
+		// Query device UID
+		CFStringRef deviceUID = NULL;
+		dataSize = sizeof(deviceUID);
+		propertyAddress.mSelector = kAudioDevicePropertyDeviceUID;
+		status = AudioObjectGetPropertyData(audioDevices[i], &propertyAddress, 0, NULL, &dataSize, &deviceUID);
+		if(kAudioHardwareNoError != status)
+			continue;
+		
+		// Query device name
+		CFStringRef deviceName = NULL;
+		UInt32 dataSource = 0;
+		UInt32 size = sizeof(dataSource);
+		status = AudioDeviceGetProperty( audioDevices[i], 0, true, kAudioDevicePropertyDataSource, &size, &dataSource);
+		if( status == noErr )
+		{
+			AudioValueTranslation theTranslation = { &dataSource, sizeof(dataSource), &deviceName, sizeof(deviceName) };
+			UInt32 theSize = sizeof(theTranslation);
+			status = AudioDeviceGetProperty( audioDevices[i], 0, true, kAudioDevicePropertyDataSourceNameForIDCFString, &theSize, &theTranslation );
+		}
+		if( status != noErr )
+		{
+			dataSize = sizeof(deviceName);
+			propertyAddress.mSelector = kAudioDevicePropertyDeviceNameCFString;
+			status = AudioObjectGetPropertyData(audioDevices[i], &propertyAddress, 0, NULL, &dataSize, &deviceName);
+			if(kAudioHardwareNoError != status)
+				continue;
+		}
+		
+		[(id)deviceName autorelease];
+
+		// Query device manufacturer
+		CFStringRef deviceManufacturer = NULL;
+		dataSize = sizeof(deviceManufacturer);
+		propertyAddress.mSelector = kAudioDevicePropertyDeviceManufacturerCFString;
+		status = AudioObjectGetPropertyData(audioDevices[i], &propertyAddress, 0, NULL, &dataSize, &deviceManufacturer);
+		if(kAudioHardwareNoError != status)
+			continue;
+		
+		// Determine if the device is an input device (it is an input device if it has input channels)
+		dataSize = 0;
+		propertyAddress.mSelector = kAudioDevicePropertyStreamConfiguration;
+		status = AudioObjectGetPropertyDataSize(audioDevices[i], &propertyAddress, 0, NULL, &dataSize);
+		if(kAudioHardwareNoError != status)
+			continue;
+		
+		AudioBufferList *bufferList = (AudioBufferList *) malloc(dataSize);
+		if(NULL == bufferList)
+			break;
+		
+		status = AudioObjectGetPropertyData(audioDevices[i], &propertyAddress, 0, NULL, &dataSize, bufferList);
+		if(kAudioHardwareNoError != status || 0 == bufferList->mNumberBuffers)
+		{
+			free(bufferList), bufferList = NULL;
+			continue;
+		}
+		
+		free(bufferList), bufferList = NULL;
+		
+		// Add a dictionary for this device to the array of input devices
+		NSDictionary	*	deviceDictionary = [NSDictionary dictionaryWithObjectsAndKeys: (NSString*)deviceUID, UKSoundFileRecorderDeviceUID, (NSString*)deviceName, UKSoundFileRecorderDeviceName, (NSString*)deviceManufacturer, UKSoundFileRecorderDeviceManufacturer, nil];
+		[names addObject: deviceDictionary];
+	}
+	
+	free(audioDevices), audioDevices = NULL;
+	
+	if( !sDidSubscribeForDeviceChanges )
+	{
+		status = AudioHardwareAddPropertyListener( kAudioHardwarePropertyDevices, UKSoundFileRecorderAudioDeviceListChanged, NULL );
+		if( status == noErr )
+			sDidSubscribeForDeviceChanges = YES;
+		else
+			UKLog(@"Couldn't register for device list changes (%d).",status);
+	}
+	
+	return names;
+}
+
+
+static OSStatus	UKSoundFileRecorderAudioDeviceListChanged( AudioHardwarePropertyID inPropertyID, void* inClientData )
+{
+	[[NSNotificationCenter defaultCenter] postNotificationName: UKSoundFileRecorderAvailableInputDevicesChangedNotification object: nil];
+	
+	return noErr;
 }
 
 
@@ -127,6 +267,7 @@
 	
 	DESTROY_DEALLOC(actualOutputFormatDict);
 	DESTROY_DEALLOC(outputFormat);
+	DESTROY_DEALLOC(inputDeviceUID);
 	
 	[super dealloc];
 }
@@ -141,6 +282,7 @@
 	delegate = dele;	// Don't retain delegate, it's very likely our owner. Wouldn't want a retain circle!
 	delegateWantsTimeChanges = (delegate && [delegate respondsToSelector: @selector(soundFileRecorder:reachedDuration:)]);
 	delegateWantsLevels = (delegate && [delegate respondsToSelector: @selector(soundFileRecorder:hasAmplitude:)]);
+	delegateWantsRawFrames = (delegate && [delegate respondsToSelector: @selector(soundFileRecorder:receivedFrames:count:seconds:)]);
 }
 
 
@@ -157,7 +299,7 @@
 //		to the file. Try not to do too much here.
 // -----------------------------------------------------------------------------
 
-OSStatus AudioInputProc( void* inRefCon, AudioUnitRenderActionFlags* ioActionFlags, const AudioTimeStamp* inTimeStamp, UInt32 inBusNumber, UInt32 inNumberFrames, AudioBufferList* ioData)
+static OSStatus AudioInputProc( void* inRefCon, AudioUnitRenderActionFlags* ioActionFlags, const AudioTimeStamp* inTimeStamp, UInt32 inBusNumber, UInt32 inNumberFrames, AudioBufferList* ioData)
 {
 	NSAutoreleasePool	*	pool = [[NSAutoreleasePool alloc] init];
 	UKSoundFileRecorder *	afr = (UKSoundFileRecorder*)inRefCon;
@@ -167,62 +309,57 @@ OSStatus AudioInputProc( void* inRefCon, AudioUnitRenderActionFlags* ioActionFla
 	err = AudioUnitRender( afr->audioUnit, ioActionFlags, inTimeStamp,
 							inBusNumber, inNumberFrames, afr->audioBuffer);
 	if( err )
-		fprintf( stderr, "AudioUnitRender() failed with error %ld\n", err );
-	
-	// Write to file, ExtAudioFile auto-magicly handles conversion/encoding
-	// NOTE: Async writes may not be flushed to disk until a the file
-	// reference is disposed using ExtAudioFileDispose
-	err = ExtAudioFileWriteAsync( afr->outputAudioFile, inNumberFrames, afr->audioBuffer);
-	if( err != noErr )
 	{
-		char	formatID[5] = { 0 };
-		*(UInt32 *)formatID = CFSwapInt32HostToBig(err);
-		formatID[4] = '\0';
-		fprintf(stderr, "ExtAudioFileWrite FAILED! %ld '%-4.4s'\n",err, formatID);
-		return err;
+		//fprintf( stderr, "AudioUnitRender() failed with error %d\n", UKInt32FromOSStatus(err) );
 	}
 	
 	UInt64	nanos = AudioConvertHostTimeToNanos( inTimeStamp->mHostTime -afr->startHostTime );
 	afr->currSeconds = ((double)nanos) * 0.000000001;
 	
-	float amps[2] = { -1, -1 };
-	if( afr->delegateWantsTimeChanges && afr->canDoMetering )
-	{
-		err = AudioUnitGetParameter( afr->audioUnit, kMatrixMixerParam_PostAveragePower, kAudioUnitScope_Input, 0, &amps [0]);
-		if( err != noErr )
-		{
-			fprintf( stderr, "Couldn't get average power (%ld).\n", err );
-			return err;
-		}
-		
-		err = AudioUnitGetParameter( afr->audioUnit, kMatrixMixerParam_PostPeakHoldLevel, kAudioUnitScope_Input, 0, &amps [1]);
-		if( err != noErr )
-		{
-			fprintf( stderr, "Couldn't get peak power (%ld).\n", err );
-			return err;
-		}
+	err = noErr;
 	
-//		currAmps = amps[0];
-//		peakAmps = amps[1];
+	@synchronized( afr )
+	{
+		if( afr->outputAudioFile )
+		{
+			// Write to file, ExtAudioFile auto-magicly handles conversion/encoding
+			// NOTE: Async writes may not be flushed to disk until the file
+			// reference is disposed using ExtAudioFileDispose
+			err = ExtAudioFileWriteAsync( afr->outputAudioFile, inNumberFrames, afr->audioBuffer);
+		}
 	}
 	
-	if( afr->delegateWantsTimeChanges || afr->delegateWantsLevels )	// Don't waste time syncing to other threads if nobody is listening:
-		[afr performSelectorOnMainThread: @selector(notifyDelegateOfTimeChange:) withObject: [NSNumber numberWithFloat: amps[0]] waitUntilDone: NO];
+	if( err != noErr )
+	{
+		char	formatID[5] = { 0 };
+		*(UInt32 *)formatID = CFSwapInt32HostToBig(err);
+		formatID[4] = '\0';
+		fprintf(stderr, "ExtAudioFileWrite FAILED! %d '%-4.4s'\n", UKInt32FromOSStatus(err), formatID);
+		goto cleanUp;
+	}
+	
+	if( afr->delegateWantsRawFrames )
+		[afr->delegate soundFileRecorder: afr receivedFrames: afr->audioBuffer count: inNumberFrames seconds:afr->currSeconds];
+
+	float	currentLevel = 0;
+	if( afr->delegateWantsLevels && ioData != NULL )
+	{
+		for( int f = 0; f < inNumberFrames; f++ )
+		{
+			for( int b = 0; b < ioData->mNumberBuffers; b++ )
+			{
+				currentLevel += *((float*)((uint8_t*)ioData->mBuffers[b].mData + f * sizeof(float))) / ioData->mNumberBuffers / inNumberFrames;
+			}
+		}
+	}
+	
+	if( afr->isRecording && (afr->delegateWantsTimeChanges || afr->delegateWantsLevels) )	// Don't waste time syncing to other threads if nobody is listening:
+		[afr performSelectorOnMainThread: @selector(notifyDelegateOfTimeChange:) withObject: [NSNumber numberWithFloat: currentLevel] waitUntilDone: NO];
+	
+cleanUp:
+	[pool release];
 	
 	return err;
-}
-
-
-// Used by our AudioInputProc to easily call this delegate method from another thread:
--(void)	notifyDelegateOfTimeChange: (NSNumber*)currentAmps
-{
-	if( isRecording )	// In case we queued one up but were already finished by the time it got executed.
-	{
-		if( delegateWantsTimeChanges )
-			[delegate soundFileRecorder: self reachedDuration: currSeconds];
-		if( delegateWantsLevels )
-			[delegate soundFileRecorder: self hasAmplitude: [currentAmps floatValue]];
-	}
 }
 
 
@@ -231,15 +368,34 @@ OSStatus AudioInputProc( void* inRefCon, AudioUnitRenderActionFlags* ioActionFla
 //		The file at outputFilePath mustn't exist yet.
 // -----------------------------------------------------------------------------
 
--(void)		setOutputFilePath: (NSString*)ofp
+-(void)		setOutputFilePath: (NSString*)inOutputFilePath
 {
-	if( outputFilePath != ofp )
+	if( outputFilePath == nil || ![inOutputFilePath isEqualToString: outputFilePath] )
 	{
+		if( outputFilePath == nil )
+			[self cleanUp];	// Make sure we recreate our objects for the new format.
+		
 		[self willChangeValueForKey: @"outputFilePath"];
 		[outputFilePath release];
-		outputFilePath = [ofp copy];
+		outputFilePath = [inOutputFilePath copy];
 		
-		[self cleanUp];	// Make sure we recreate our objects for the new format.
+		if( audioUnit && inOutputFilePath )
+		{
+			@synchronized( self )
+			{
+				// Dispose our audio file reference.
+				// Also responsible for flushing async data to disk.
+				if( outputAudioFile )
+				{
+					ExtAudioFileDispose( outputAudioFile );
+					outputAudioFile = NULL;
+					
+					NSString	*	errMsg = [self setupAudioFile];
+					if( errMsg )
+						UKLog( @"%@", errMsg );
+				}
+			}
+		}
 		[self didChangeValueForKey: @"outputFilePath"];
 	}
 }
@@ -270,8 +426,9 @@ OSStatus AudioInputProc( void* inRefCon, AudioUnitRenderActionFlags* ioActionFla
 		if( isRecording )
 			[NSException raise: @"UKSoundFileRecorderBusyRecording" format: @"Can't change output format when recording has already started."];
 		
-		[outputFormat release];
+		NSDictionary *oldFormat = outputFormat;
 		outputFormat = [inASBD copy];
+		[oldFormat release];
 		
 		[self cleanUp];	// Make sure we recreate our objects for the new format.
 	}
@@ -382,6 +539,35 @@ OSStatus AudioInputProc( void* inRefCon, AudioUnitRenderActionFlags* ioActionFla
 }
 
 
+-(void)	setInputDeviceUID: (NSString*)inDeviceUID
+{
+	OSStatus	err = noErr;
+	if( inDeviceUID == nil )
+	{
+		UInt32		theSize = sizeof(AudioDeviceID);
+		err = AudioHardwareGetProperty( kAudioHardwarePropertyDefaultInputDevice, &theSize, &inputDeviceID );
+	}
+	else
+	{
+		AudioValueTranslation	trans;
+		trans.mInputData = (void*)&inDeviceUID;
+		trans.mInputDataSize = sizeof(CFStringRef);
+		trans.mOutputData = &inputDeviceID;
+		trans.mOutputDataSize = sizeof(AudioDeviceID);
+		UInt32		theSize = sizeof(AudioValueTranslation);
+		err = AudioHardwareGetProperty( kAudioHardwarePropertyDeviceForUID, &theSize, &trans );
+	}
+	
+	if( err == noErr )
+		ASSIGN(inputDeviceUID,inDeviceUID);
+}
+
+
+-(NSString*)	inputDeviceUID
+{
+	return inputDeviceUID;
+}
+
 @end
 
 
@@ -435,58 +621,71 @@ OSStatus AudioInputProc( void* inRefCon, AudioUnitRenderActionFlags* ioActionFla
 	NSString*					fileFormatStr = [outputFormat objectForKey: UKAudioOutputFileType];
 	AudioFileTypeID				fileFormat = fileFormatStr ? UKAudioStreamFormatIDFromString( fileFormatStr ) : kAudioFileM4AType;
 	
+	if( [[NSFileManager defaultManager] fileExistsAtPath: outputFilePath] )
+	{
+		NSError*	err = nil;
+		if( ![[NSFileManager defaultManager] removeItemAtPath: outputFilePath error: &err] )
+			UKLog(@"Couldn't delete %@: %@", outputFilePath, err);
+	}
+	
 	UKAudioStreamDescriptionFromDictionary( outputFormat, &desiredOutputFormat );
 	
-	if( ![outputDirectory getFSRef: &parentDirectory] )
-		return [NSString stringWithFormat: @"Could not get reference to directory \"%@\"",outputDirectory];
+	if( outputFilePath )
+	{
+		if( ![outputDirectory getFSRef: &parentDirectory] )
+			return [NSString stringWithFormat: @"Could not get reference to directory \"%@\"",outputDirectory];
+	}
 	
-	if( outputAudioFile != NULL )	// Have an audio file already? Get rid of that.
+	if( outputAudioFile != NULL )	// Have an audio file already? Get rid of that. IMPORTANT for setOutputFilePath:, which relies on this not calling cleanUp and stopping the player when it's just being used to start a new segment.
 		[self cleanUp];
 	
-	// Create new MP4 file (kAudioFileM4AType)
-	err = ExtAudioFileCreateNew( &parentDirectory, (CFStringRef)outputFileName, fileFormat, &desiredOutputFormat, NULL, &outputAudioFile );
-	if( err != noErr )
+	if( outputFilePath )
 	{
-		char formatID[5];
-		*(UInt32 *)formatID = CFSwapInt32HostToBig(err);
-		formatID[4] = '\0';
-		return [NSString stringWithFormat: @"Could not create the audio file (ID=%d/'%-4.4s')",err, formatID];
-	}
-
-	// Inform the file what format the data is we're going to give it, should be pcm
-	// You must set this in order to encode or decode a non-PCM file data format.
-	err = ExtAudioFileSetProperty( outputAudioFile, kExtAudioFileProperty_ClientDataFormat, sizeof(AudioStreamBasicDescription), &actualOutputFormat);
-	if( err != noErr )
-	{
-		char formatID[5];
-		*(UInt32 *)formatID = CFSwapInt32HostToBig(err);
-		formatID[4] = '\0';
-		return [NSString stringWithFormat: @"Could not set up data format for output file (ID=%d/'%-4.4s')",err, formatID];
-	}
-
-	// If we're recording from a mono source, setup a simple channel map to split to stereo
-	if( deviceFormat.mChannelsPerFrame == 1 && actualOutputFormat.mChannelsPerFrame == 2)
-	{
-		// Get the underlying AudioConverterRef
-		UInt32 size = sizeof(AudioConverterRef);
-		err = ExtAudioFileGetProperty( outputAudioFile, kExtAudioFileProperty_AudioConverter, &size, &conv );
-		if( conv )
+		// Create new MP4 file (kAudioFileM4AType)
+		err = ExtAudioFileCreateNew( &parentDirectory, (CFStringRef)outputFileName, fileFormat, &desiredOutputFormat, NULL, &outputAudioFile );
+		if( err != noErr )
 		{
-			// This should be as large as the number of output channels,
-			// each element specifies which input channel's data is routed to that output channel
-			SInt32 channelMap[] = { 0, 0 };
-			err = AudioConverterSetProperty( conv, kAudioConverterChannelMap, 2 * sizeof(SInt32), channelMap );
+			char formatID[5];
+			*(UInt32 *)formatID = CFSwapInt32HostToBig(err);
+			formatID[4] = '\0';
+			return [NSString stringWithFormat: @"Could not create the audio file (ID=%d/'%-4.4s')",err, formatID];
 		}
-	}
 
-	// Initialize async writes thus preparing it for IO
-	err = ExtAudioFileWriteAsync( outputAudioFile, 0, NULL );
-	if( err != noErr )
-	{
-		char formatID[5];
-		*(UInt32 *)formatID = CFSwapInt32HostToBig(err);
-		formatID[4] = '\0';
-		return [NSString stringWithFormat: @"Could not initialize asynchronous writing (ID=%d/'%-4.4s')",err, formatID];
+		// Inform the file what format the data is we're going to give it, should be pcm
+		// You must set this in order to encode or decode a non-PCM file data format.
+		err = ExtAudioFileSetProperty( outputAudioFile, kExtAudioFileProperty_ClientDataFormat, sizeof(AudioStreamBasicDescription), &actualOutputFormat);
+		if( err != noErr )
+		{
+			char formatID[5];
+			*(UInt32 *)formatID = CFSwapInt32HostToBig(err);
+			formatID[4] = '\0';
+			return [NSString stringWithFormat: @"Could not set up data format for output file (ID=%d/'%-4.4s')",err, formatID];
+		}
+
+		// If we're recording from a mono source, setup a simple channel map to split to stereo
+		if( deviceFormat.mChannelsPerFrame == 1 && actualOutputFormat.mChannelsPerFrame == 2)
+		{
+			// Get the underlying AudioConverterRef
+			UInt32 size = sizeof(AudioConverterRef);
+			err = ExtAudioFileGetProperty( outputAudioFile, kExtAudioFileProperty_AudioConverter, &size, &conv );
+			if( conv )
+			{
+				// This should be as large as the number of output channels,
+				// each element specifies which input channel's data is routed to that output channel
+				SInt32 channelMap[] = { 0, 0 };
+				err = AudioConverterSetProperty( conv, kAudioConverterChannelMap, 2 * sizeof(SInt32), channelMap );
+			}
+		}
+
+		// Initialize async writes thus preparing it for IO
+		err = ExtAudioFileWriteAsync( outputAudioFile, 0, NULL );
+		if( err != noErr )
+		{
+			char formatID[5];
+			*(UInt32 *)formatID = CFSwapInt32HostToBig(err);
+			formatID[4] = '\0';
+			return [NSString stringWithFormat: @"Could not initialize asynchronous writing (ID=%d/'%-4.4s')",err, formatID];
+		}
 	}
 
 	return nil;
@@ -524,7 +723,7 @@ OSStatus AudioInputProc( void* inRefCon, AudioUnitRenderActionFlags* ioActionFla
 	description.componentManufacturer = kAudioUnitManufacturer_Apple;
 	description.componentFlags = 0;
 	description.componentFlagsMask = 0;
-	if( component = FindNextComponent( NULL, &description ) )
+	if(( component = FindNextComponent( NULL, &description ) ))
 	{
 		err = OpenAComponent( component, &audioUnit );
 		if( err != noErr )
@@ -553,24 +752,24 @@ OSStatus AudioInputProc( void* inRefCon, AudioUnitRenderActionFlags* ioActionFla
 			[self cleanUp];
 			return [NSString stringWithFormat: @"Couldn't set EnableIO property on the audio unit (ID=%d)", err];
 		}
-		else
-		{
-			err = AudioUnitSetProperty( audioUnit, kAudioUnitProperty_MeteringMode, kAudioUnitScope_Input, 1, &param, sizeof(UInt32) );
-			canDoMetering = (err == noErr);
-		}
-
 	}
 
 	// Select the default input device
-	param = sizeof(AudioDeviceID);
-	err = AudioHardwareGetProperty( kAudioHardwarePropertyDefaultInputDevice, &param, &inputDeviceID );
-	if(err != noErr)
+	if( inputDeviceID == kAudioObjectUnknown )	// Couldn't find it? Fall back to default input:
+	{
+		DESTROY(inputDeviceUID);
+		param = sizeof(AudioDeviceID);
+		err = AudioHardwareGetProperty( kAudioHardwarePropertyDefaultInputDevice, &param, &inputDeviceID );
+	}
+	else
+		err = noErr;
+	if(err != noErr )
 	{
 		[self cleanUp];
-		return [NSString stringWithFormat: @"Couldn't get default input device (ID=%d)", err];
+		return [NSString stringWithFormat: @"Couldn't get sound input device (ID=%d)", err];
 	}
 	
-	// Set the current device to the default input unit.
+	// Set the current device to the selected input unit.
 	err = AudioUnitSetProperty( audioUnit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0, &inputDeviceID, sizeof(AudioDeviceID) );
 	if(err != noErr)
 	{
@@ -578,6 +777,9 @@ OSStatus AudioInputProc( void* inRefCon, AudioUnitRenderActionFlags* ioActionFla
 		return [NSString stringWithFormat: @"Failed to hook up input device to our AudioUnit (ID=%d)", err];
 	}
 	
+	err = AudioUnitSetProperty( audioUnit, kAudioUnitProperty_MeteringMode, kAudioUnitScope_Output, 1, &param, sizeof(UInt32) );
+	canDoMetering = (err == noErr);
+
 	// Setup render callback
 	// This will be called when the AUHAL has input data
 	callback.inputProc = AudioInputProc;
@@ -589,6 +791,41 @@ OSStatus AudioInputProc( void* inRefCon, AudioUnitRenderActionFlags* ioActionFla
 		return [NSString stringWithFormat: @"Could not install render callback on our AudioUnit (ID=%d)", err];
 	}
 	
+
+	{
+		Float64 rate;
+		param = sizeof(rate);
+
+		err = AudioDeviceGetProperty(inputDeviceID, 0, true,
+						kAudioDevicePropertyNominalSampleRate,
+						&param, &rate);
+		if (err == noErr)
+		{
+			NSNumber*	num = [outputFormat objectForKey: UKAudioStreamSampleRate];
+			if( num )
+			{
+				rate = [num doubleValue];
+				
+				err = AudioDeviceSetProperty(inputDeviceID, NULL, 0, true,
+								kAudioDevicePropertyNominalSampleRate,
+								sizeof(rate), &rate);
+				
+				if (err != noErr)
+				{
+					rate = rate < 32000 ? rate * 2 : rate / 2;
+					
+					err = AudioDeviceSetProperty(inputDeviceID, NULL, 0, true,
+								kAudioDevicePropertyNominalSampleRate,
+								sizeof(rate), &rate);
+				}
+			}
+		}
+		if(err != noErr)
+		{
+			UKLog( @"Could not change the nominal sample rate of the input device (ID=%d)", err );
+		}
+	}
+
 	// get hardware device format
 	param = sizeof(AudioStreamBasicDescription);
 	err = AudioUnitGetProperty( audioUnit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, 1, &deviceFormat, &param );
@@ -604,6 +841,9 @@ OSStatus AudioInputProc( void* inRefCon, AudioUnitRenderActionFlags* ioActionFla
 	actualOutputFormat.mSampleRate = deviceFormat.mSampleRate;
 	actualOutputFormat.mFormatID = kAudioFormatLinearPCM;
 	actualOutputFormat.mFormatFlags = kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked | kAudioFormatFlagIsNonInterleaved;
+	
+	UKLog( @"sampleRate %f", actualOutputFormat.mSampleRate );
+	
 	if( actualOutputFormat.mFormatID == kAudioFormatLinearPCM && audioChannels == 1 )
 		actualOutputFormat.mFormatFlags &= ~kLinearPCMFormatFlagIsNonInterleaved;
 #if __BIG_ENDIAN__
@@ -622,6 +862,27 @@ OSStatus AudioInputProc( void* inRefCon, AudioUnitRenderActionFlags* ioActionFla
 		return [NSString stringWithFormat: @"Could not change the stream format of the output device (ID=%d)", err];
 	}
 	
+	param = sizeof(AudioStreamBasicDescription);
+	err = AudioUnitGetProperty( audioUnit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, 1, &actualOutputFormat, &param );
+	// Make sure we remember correctly what format we actually got.
+	if(err != noErr)
+	{
+		[self cleanUp];
+		return [NSString stringWithFormat: @"Could not retrieve the stream format of the output device (ID=%d)", err];
+	}
+	DESTROY(actualOutputFormatDict);	// Make sure next guy who asks for it gets a new lazily-allocated conversion.
+	
+	if( deviceFormat.mChannelsPerFrame == 1 && audioChannels == 2 )
+	{
+		SInt32 channelMap[] = { 0, 0 };
+		err = AudioUnitSetProperty( audioUnit, kAudioOutputUnitProperty_ChannelMap, kAudioUnitScope_Output, 1, channelMap, 2 * sizeof(SInt32) );
+		if( err != noErr )
+		{
+			[self cleanUp];
+			return [NSString stringWithFormat: @"Error %d setting channel map.", err ];
+		}
+	}
+
 	// Get the number of frames in the IO buffer(s)
 	param = sizeof(UInt32);
 	err = AudioUnitGetProperty( audioUnit, kAudioDevicePropertyBufferFrameSize, kAudioUnitScope_Global, 0, &audioSamples, &param );
@@ -706,5 +967,16 @@ OSStatus AudioInputProc( void* inRefCon, AudioUnitRenderActionFlags* ioActionFla
 	}
 }
 
+// Used by our AudioInputProc to easily call this delegate method from another thread:
+-(void)	notifyDelegateOfTimeChange: (NSNumber*)currentAmps
+{
+	if( isRecording )	// In case we queued one up but were already finished by the time it got executed.
+	{
+		if( delegateWantsTimeChanges )
+			[delegate soundFileRecorder: self reachedDuration: currSeconds];
+		if( delegateWantsLevels )
+			[delegate soundFileRecorder: self hasAmplitude: [currentAmps floatValue]];
+	}
+}
 
 @end

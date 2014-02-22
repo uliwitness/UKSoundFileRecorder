@@ -60,7 +60,8 @@
 	AudioUnit					audioUnit;
 	ExtAudioFileRef				outputAudioFile;
 	NSString			*		outputFilePath;
-
+	
+	NSString			*		inputDeviceUID;
 	AudioDeviceID				inputDeviceID;
 	UInt32						audioChannels;
 	UInt32						audioSamples;
@@ -77,15 +78,18 @@
 	BOOL						delegateWantsTimeChanges;
 	BOOL						delegateWantsLevels;
 	BOOL						canDoMetering;
+	BOOL						delegateWantsRawFrames;
 }
 
 +(NSDictionary*)	defaultOutputFormat;
+
++(NSArray*)			availableInputDevices;	// NSArray of NSDictionaries. See below for the keys.
 
 //-(id)				init;	// Designated initializer. You can use -init and then do setOutputFilePath: or use -initWithOutputFilePath:.
 -(id)				initWithOutputFilePath: (NSString*)ofp;	
 
 // Setup:
--(void)				setOutputFilePath: (NSString*)ofp;
+-(void)				setOutputFilePath: (NSString*)ofp;			// If you set no path, the delegate *must* implement -soundFileRecorder:receivedFrames:count:seconds:.
 -(NSString*)		outputFilePath;
 -(IBAction)			takeOutputFilePathFrom: (id)sender;			// Calls [self setOutputFilePath: [sender stringValue]].
 
@@ -100,6 +104,9 @@
 -(void)				start: (id)sender;
 -(BOOL)				isRecording;
 -(void)				stop: (id)sender;
+
+-(void)				setInputDeviceUID: (NSString*)inString;	// Pass NIL for the system default input device as set in System Preferences.app
+-(NSString*)		inputDeviceUID;
 
 // You probably don't need this:
 -(void)				prepare;		// Called as needed by start:, if nobody called it before that.
@@ -125,6 +132,22 @@
 
 
 // -----------------------------------------------------------------------------
+//	Dictionary keys in -availableInputDevices dictionaries:
+// -----------------------------------------------------------------------------
+
+extern NSString	*	UKSoundFileRecorderDeviceUID;
+extern NSString	*	UKSoundFileRecorderDeviceName;
+extern NSString	*	UKSoundFileRecorderDeviceManufacturer;
+
+
+// -----------------------------------------------------------------------------
+//	Notifications:
+// -----------------------------------------------------------------------------
+
+extern NSString*	UKSoundFileRecorderAvailableInputDevicesChangedNotification;
+
+
+// -----------------------------------------------------------------------------
 //	Delegate protocol:
 // -----------------------------------------------------------------------------
 
@@ -143,6 +166,9 @@
 
 // Sent after a successful stop:
 -(void)	soundFileRecorderWasStopped: (UKSoundFileRecorder*)sender;
+
+// The following is required if you do not provide an outputFilePath:
+-(void)	soundFileRecorder: (UKSoundFileRecorder*)sender receivedFrames: (AudioBufferList*)inData count: (UInt32)inNumberFrames seconds: (double)inSeconds;
 
 @end
 
