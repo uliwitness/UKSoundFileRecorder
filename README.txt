@@ -1,8 +1,8 @@
 UKSOUNDFILERECORDER
 -------------------
 
-This is a class that uses CoreAudio to record sound from the system's default
-sound input and writes it to a file.
+This is a class that uses CoreAudio to record sound from a sound input
+and writes it to a file or hand the audio samples to a delegate.
 
 
 LICENSE:
