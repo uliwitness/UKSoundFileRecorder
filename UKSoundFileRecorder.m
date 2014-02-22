@@ -30,8 +30,6 @@
 // -----------------------------------------------------------------------------
 
 #import "UKSoundFileRecorder.h"
-#import "NSString+CarbonUtilities.h"
-#import "UKHelperMacros.h"
 #import <sys/param.h>	// for MAX().
 
 
@@ -202,7 +200,7 @@ static int32_t	UKInt32FromOSStatus( OSStatus inErr )
 		if( status == noErr )
 			sDidSubscribeForDeviceChanges = YES;
 		else
-			UKLog(@"Couldn't register for device list changes (%d).",status);
+			NSLog(@"Couldn't register for device list changes (%d).",status);
 	}
 	
 	return names;
@@ -263,11 +261,15 @@ static OSStatus	UKSoundFileRecorderAudioDeviceListChanged( AudioHardwareProperty
 	NS_ENDHANDLER
 	[self destroyAudioBufferList: audioBuffer];
 	
-	DESTROY_DEALLOC(outputFilePath);
+	[outputFilePath release];
+	outputFilePath = nil;
 	
-	DESTROY_DEALLOC(actualOutputFormatDict);
-	DESTROY_DEALLOC(outputFormat);
-	DESTROY_DEALLOC(inputDeviceUID);
+	[actualOutputFormatDict release];
+	actualOutputFormatDict = nil;
+	[outputFormat release];
+	outputFormat = nil;
+	[inputDeviceUID release];
+	inputDeviceUID = nil;
 	
 	[super dealloc];
 }
@@ -392,7 +394,7 @@ cleanUp:
 					
 					NSString	*	errMsg = [self setupAudioFile];
 					if( errMsg )
-						UKLog( @"%@", errMsg );
+						NSLog( @"%@", errMsg );
 				}
 			}
 		}
@@ -444,7 +446,10 @@ cleanUp:
 -(NSDictionary*)	actualOutputFormat
 {
 	if( !actualOutputFormatDict )
-		ASSIGN(actualOutputFormatDict, UKDictionaryFromAudioStreamDescription( &actualOutputFormat ) );
+	{
+		[actualOutputFormatDict release];
+		actualOutputFormatDict = [UKDictionaryFromAudioStreamDescription( &actualOutputFormat ) retain];
+	}
 	return actualOutputFormatDict;
 }
 
@@ -558,8 +563,11 @@ cleanUp:
 		err = AudioHardwareGetProperty( kAudioHardwarePropertyDeviceForUID, &theSize, &trans );
 	}
 	
-	if( err == noErr )
-		ASSIGN(inputDeviceUID,inDeviceUID);
+	if( err == noErr && inDeviceUID != inputDeviceUID )
+	{
+		[inputDeviceUID release];
+		inputDeviceUID = [inDeviceUID retain];
+	}
 }
 
 
@@ -625,7 +633,7 @@ cleanUp:
 	{
 		NSError*	err = nil;
 		if( ![[NSFileManager defaultManager] removeItemAtPath: outputFilePath error: &err] )
-			UKLog(@"Couldn't delete %@: %@", outputFilePath, err);
+			NSLog(@"Couldn't delete %@: %@", outputFilePath, err);
 	}
 	
 	UKAudioStreamDescriptionFromDictionary( outputFormat, &desiredOutputFormat );
@@ -757,7 +765,8 @@ cleanUp:
 	// Select the default input device
 	if( inputDeviceID == kAudioObjectUnknown )	// Couldn't find it? Fall back to default input:
 	{
-		DESTROY(inputDeviceUID);
+		[inputDeviceUID release];
+		inputDeviceUID = nil;
 		param = sizeof(AudioDeviceID);
 		err = AudioHardwareGetProperty( kAudioHardwarePropertyDefaultInputDevice, &param, &inputDeviceID );
 	}
@@ -822,7 +831,7 @@ cleanUp:
 		}
 		if(err != noErr)
 		{
-			UKLog( @"Could not change the nominal sample rate of the input device (ID=%d)", err );
+			NSLog( @"Could not change the nominal sample rate of the input device (ID=%d)", err );
 		}
 	}
 
@@ -842,7 +851,7 @@ cleanUp:
 	actualOutputFormat.mFormatID = kAudioFormatLinearPCM;
 	actualOutputFormat.mFormatFlags = kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked | kAudioFormatFlagIsNonInterleaved;
 	
-	UKLog( @"sampleRate %f", actualOutputFormat.mSampleRate );
+	NSLog( @"sampleRate %f", actualOutputFormat.mSampleRate );
 	
 	if( actualOutputFormat.mFormatID == kAudioFormatLinearPCM && audioChannels == 1 )
 		actualOutputFormat.mFormatFlags &= ~kLinearPCMFormatFlagIsNonInterleaved;
@@ -870,7 +879,8 @@ cleanUp:
 		[self cleanUp];
 		return [NSString stringWithFormat: @"Could not retrieve the stream format of the output device (ID=%d)", err];
 	}
-	DESTROY(actualOutputFormatDict);	// Make sure next guy who asks for it gets a new lazily-allocated conversion.
+	[actualOutputFormatDict release];	// Make sure next guy who asks for it gets a new lazily-allocated conversion.
+	actualOutputFormatDict = nil;
 	
 	if( deviceFormat.mChannelsPerFrame == 1 && audioChannels == 2 )
 	{

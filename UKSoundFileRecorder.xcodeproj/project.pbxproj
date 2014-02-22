@@ -9,7 +9,6 @@
 /* Begin PBXBuildFile section */
 		3D0CF7BE0C48D45300C9667A /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 3D0CF7BD0C48D45300C9667A /* AppDelegate.m */; };
 		3D0CF7C70C48D46C00C9667A /* UKSoundFileRecorder.m in Sources */ = {isa = PBXBuildFile; fileRef = 3D0CF7C60C48D46C00C9667A /* UKSoundFileRecorder.m */; };
-		3D0CF7E70C48D9C000C9667A /* NSString+CarbonUtilities.m in Sources */ = {isa = PBXBuildFile; fileRef = 3D0CF7E60C48D9C000C9667A /* NSString+CarbonUtilities.m */; };
 		3D0CF8C10C48ED2700C9667A /* UKAudioStreamBasicDescription.m in Sources */ = {isa = PBXBuildFile; fileRef = 3D0CF8C00C48ED2700C9667A /* UKAudioStreamBasicDescription.m */; };
 		3D59F60D0C5B57EF00AAEBE2 /* AudioToolbox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3D59F60C0C5B57EF00AAEBE2 /* AudioToolbox.framework */; };
 		3D59F6160C5B580B00AAEBE2 /* CoreAudio.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3D59F5FC0C5B57A500AAEBE2 /* CoreAudio.framework */; };
@@ -33,11 +32,8 @@
 		3D0CF7BD0C48D45300C9667A /* AppDelegate.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = AppDelegate.m; sourceTree = "<group>"; };
 		3D0CF7C50C48D46C00C9667A /* UKSoundFileRecorder.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = UKSoundFileRecorder.h; sourceTree = "<group>"; };
 		3D0CF7C60C48D46C00C9667A /* UKSoundFileRecorder.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = UKSoundFileRecorder.m; sourceTree = "<group>"; };
-		3D0CF7E50C48D9C000C9667A /* NSString+CarbonUtilities.h */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.h; name = "NSString+CarbonUtilities.h"; path = "../UliKit/NSString+CarbonUtilities.h"; sourceTree = SOURCE_ROOT; };
-		3D0CF7E60C48D9C000C9667A /* NSString+CarbonUtilities.m */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.objc; name = "NSString+CarbonUtilities.m"; path = "../UliKit/NSString+CarbonUtilities.m"; sourceTree = SOURCE_ROOT; };
 		3D0CF8BF0C48ED2700C9667A /* UKAudioStreamBasicDescription.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = UKAudioStreamBasicDescription.h; sourceTree = "<group>"; };
 		3D0CF8C00C48ED2700C9667A /* UKAudioStreamBasicDescription.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = UKAudioStreamBasicDescription.m; sourceTree = "<group>"; };
-		3D0CFA2F0C49117500C9667A /* README.txt */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = README.txt; sourceTree = "<group>"; };
 		3D59F5FC0C5B57A500AAEBE2 /* CoreAudio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudio.framework; path = /System/Library/Frameworks/CoreAudio.framework; sourceTree = "<absolute>"; };
 		3D59F6070C5B57D400AAEBE2 /* AudioUnit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AudioUnit.framework; path = /System/Library/Frameworks/AudioUnit.framework; sourceTree = "<absolute>"; };
 		3D59F60C0C5B57EF00AAEBE2 /* AudioToolbox.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AudioToolbox.framework; path = /System/Library/Frameworks/AudioToolbox.framework; sourceTree = "<absolute>"; };
@@ -63,15 +59,12 @@
 		080E96DDFE201D6D7F000001 /* Classes */ = {
 			isa = PBXGroup;
 			children = (
-				3D0CFA2F0C49117500C9667A /* README.txt */,
 				3D0CF7BC0C48D45300C9667A /* AppDelegate.h */,
 				3D0CF7BD0C48D45300C9667A /* AppDelegate.m */,
 				3D0CF7C50C48D46C00C9667A /* UKSoundFileRecorder.h */,
 				3D0CF7C60C48D46C00C9667A /* UKSoundFileRecorder.m */,
 				3D0CF8BF0C48ED2700C9667A /* UKAudioStreamBasicDescription.h */,
 				3D0CF8C00C48ED2700C9667A /* UKAudioStreamBasicDescription.m */,
-				3D0CF7E50C48D9C000C9667A /* NSString+CarbonUtilities.h */,
-				3D0CF7E60C48D9C000C9667A /* NSString+CarbonUtilities.m */,
 			);
 			name = Classes;
 			sourceTree = "<group>";
@@ -171,9 +164,15 @@
 /* Begin PBXProject section */
 		29B97313FDCFA39411CA2CEA /* Project object */ = {
 			isa = PBXProject;
+			attributes = {
+			};
 			buildConfigurationList = C01FCF4E08A954540054247B /* Build configuration list for PBXProject "UKSoundFileRecorder" */;
 			compatibilityVersion = "Xcode 2.4";
+			developmentRegion = English;
 			hasScannedForEncodings = 1;
+			knownRegions = (
+				en,
+			);
 			mainGroup = 29B97314FDCFA39411CA2CEA /* UKSoundRecorder */;
 			projectDirPath = "";
 			projectRoot = ..;
@@ -203,7 +202,6 @@
 				8D11072D0486CEB800E47090 /* main.m in Sources */,
 				3D0CF7BE0C48D45300C9667A /* AppDelegate.m in Sources */,
 				3D0CF7C70C48D46C00C9667A /* UKSoundFileRecorder.m in Sources */,
-				3D0CF7E70C48D9C000C9667A /* NSString+CarbonUtilities.m in Sources */,
 				3D0CF8C10C48ED2700C9667A /* UKAudioStreamBasicDescription.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
