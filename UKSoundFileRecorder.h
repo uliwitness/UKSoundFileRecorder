@@ -47,6 +47,9 @@
 #import "UKAudioStreamBasicDescription.h"
 
 
+@protocol UKSoundFileRecorderDelegate;
+
+
 // -----------------------------------------------------------------------------
 //	UKSoundFileRecorder:
 // -----------------------------------------------------------------------------
@@ -88,8 +91,8 @@
 -(void)				setOutputFormat: (NSDictionary*)inASBD;		// Keys for this dictionary can be found in UKAudioStreamBasicDescription.h and below.
 -(NSDictionary*)	outputFormat;
 
--(void)				setDelegate: (id)dele;	// See UKSoundFileRecorderDelegate protocol.
--(id)				delegate;
+-(void)								setDelegate: (id<UKSoundFileRecorderDelegate>)dele;
+-(id<UKSoundFileRecorderDelegate>)	delegate;
 
 // Recording:
 -(void)				start: (id)sender;
@@ -123,7 +126,9 @@
 //	Delegate protocol:
 // -----------------------------------------------------------------------------
 
-@interface NSObject (UKSoundFileRecorderDelegate)
+@protocol UKSoundFileRecorderDelegate
+
+@optional
 
 // Sent on a successful start:
 -(void)	soundFileRecorderWasStarted: (UKSoundFileRecorder*)sender;

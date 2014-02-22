@@ -113,6 +113,8 @@
 
 -(void)	dealloc
 {
+	[NSRunLoop cancelPreviousPerformRequestsWithTarget: self];
+	
 	NS_DURING
 		[self cleanUp];	// cleanUp calls stop, which may throw.
 	NS_HANDLER
@@ -134,7 +136,7 @@
 //	Delegate accessors:
 // -----------------------------------------------------------------------------
 
--(void)	setDelegate: (id)dele
+-(void)	setDelegate: (id<UKSoundFileRecorderDelegate>)dele
 {
 	delegate = dele;	// Don't retain delegate, it's very likely our owner. Wouldn't want a retain circle!
 	delegateWantsTimeChanges = (delegate && [delegate respondsToSelector: @selector(soundFileRecorder:reachedDuration:)]);
@@ -142,7 +144,7 @@
 }
 
 
--(id)	delegate
+-(id<UKSoundFileRecorderDelegate>)	delegate
 {
 	return delegate;
 }
@@ -335,7 +337,7 @@ OSStatus AudioInputProc( void* inRefCon, AudioUnitRenderActionFlags* ioActionFla
 		isRecording = YES;
 		[self didChangeValueForKey: @"isRecording"];
 		if( delegate && [delegate respondsToSelector: @selector(soundFileRecorderWasStarted:)] )
-			[(NSObject*)delegate soundFileRecorderWasStarted: self];
+			[delegate soundFileRecorderWasStarted: self];
 	}
 	else
 		[NSException raise: @"UKSoundFileRecorderCantStart" format: @"Could not start recording (ID=%d)", err];
@@ -363,7 +365,7 @@ OSStatus AudioInputProc( void* inRefCon, AudioUnitRenderActionFlags* ioActionFla
 		isRecording = NO;
 		[self didChangeValueForKey: @"isRecording"];
 		if( delegate && [delegate respondsToSelector: @selector(soundFileRecorderWasStopped:)] )
-			[(NSObject*)delegate soundFileRecorderWasStopped: self];
+			[delegate performSelectorOnMainThread: @selector(soundFileRecorderWasStopped:) withObject: self waitUntilDone: NO];
 		
 		[self cleanUp];	// Make sure file gets flushed to disk.
 		[[NSWorkspace sharedWorkspace] noteFileSystemChanged: outputFilePath];	// Make sure Finder updates file size.
