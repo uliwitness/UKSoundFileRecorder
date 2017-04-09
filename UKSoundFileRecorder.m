@@ -45,7 +45,8 @@ static BOOL		sDidSubscribeForDeviceChanges = NO;
 
 
 static OSStatus AudioInputProc( void* inRefCon, AudioUnitRenderActionFlags* ioActionFlags, const AudioTimeStamp* inTimeStamp, UInt32 inBusNumber, UInt32 inNumberFrames, AudioBufferList* ioData);
-static OSStatus	UKSoundFileRecorderAudioDeviceListChanged( AudioHardwarePropertyID inPropertyID, void* inClientData );
+static OSStatus	UKSoundFileRecorderAudioDeviceListChanged( AudioObjectID objectID, UInt32 numberAddresses,
+															const AudioObjectPropertyAddress addresses[], void* inClientData );
 
 
 static int32_t	UKInt32FromOSStatus( OSStatus inErr )
@@ -61,8 +62,8 @@ static int32_t	UKInt32FromOSStatus( OSStatus inErr )
 @interface UKSoundFileRecorder (UKSoundFileRecorderPrivateMethods)
 
 -(void)				cleanUp;
--(NSString*)		setupAudioFile;		// Returns error string, NIL on success.
--(NSString*)		configureAU;		// Returns error string, NIL on success.
+-(NSError*)			setupAudioFile;		// Returns error string, NIL on success.
+-(NSError*)			configureAU;		// Returns error string, NIL on success.
 -(AudioBufferList*)	allocateAudioBufferListWithNumChannels: (UInt32)numChannels size: (UInt32)size;
 -(void)				destroyAudioBufferList: (AudioBufferList*)list;
 -(void)				notifyDelegateOfTimeChange: (NSNumber*)currentAmps;
@@ -90,6 +91,7 @@ static int32_t	UKInt32FromOSStatus( OSStatus inErr )
 												[NSNumber numberWithUnsignedInt: 1024], UKAudioStreamFramesPerPacket,
 												[NSNumber numberWithUnsignedInt: 2], UKAudioStreamChannelsPerFrame,
 												UKAudioOutputFileTypeM4A, UKAudioOutputFileType,
+												@(kMPEG4Object_AAC_Main), UKAudioStreamFormatFlags,
 												nil];
 	}
 	
@@ -141,12 +143,14 @@ static int32_t	UKInt32FromOSStatus( OSStatus inErr )
 		CFStringRef deviceName = NULL;
 		UInt32 dataSource = 0;
 		UInt32 size = sizeof(dataSource);
-		status = AudioDeviceGetProperty( audioDevices[i], 0, true, kAudioDevicePropertyDataSource, &size, &dataSource);
+		AudioObjectPropertyAddress	address = { kAudioDevicePropertyDataSource, kAudioDevicePropertyScopeInput, 0 };
+		status = AudioObjectGetPropertyData( audioDevices[i], &address, 0, NULL, &size, &dataSource );
 		if( status == noErr )
 		{
 			AudioValueTranslation theTranslation = { &dataSource, sizeof(dataSource), &deviceName, sizeof(deviceName) };
 			UInt32 theSize = sizeof(theTranslation);
-			status = AudioDeviceGetProperty( audioDevices[i], 0, true, kAudioDevicePropertyDataSourceNameForIDCFString, &theSize, &theTranslation );
+			address = (AudioObjectPropertyAddress){ kAudioDevicePropertyDataSourceNameForIDCFString, kAudioDevicePropertyScopeInput, 0 };
+			status = AudioObjectGetPropertyData( audioDevices[i], &address, 0, NULL, &theSize, &theTranslation );
 		}
 		if( status != noErr )
 		{
@@ -196,7 +200,12 @@ static int32_t	UKInt32FromOSStatus( OSStatus inErr )
 	
 	if( !sDidSubscribeForDeviceChanges )
 	{
-		status = AudioHardwareAddPropertyListener( kAudioHardwarePropertyDevices, UKSoundFileRecorderAudioDeviceListChanged, NULL );
+		AudioObjectPropertyAddress address = {
+												kAudioHardwarePropertyDevices,
+												kAudioObjectPropertyScopeGlobal,
+												kAudioObjectPropertyElementMaster
+											 };
+		status = AudioObjectAddPropertyListener(kAudioObjectSystemObject, &address, UKSoundFileRecorderAudioDeviceListChanged, NULL );
 		if( status == noErr )
 			sDidSubscribeForDeviceChanges = YES;
 		else
@@ -207,7 +216,8 @@ static int32_t	UKInt32FromOSStatus( OSStatus inErr )
 }
 
 
-static OSStatus	UKSoundFileRecorderAudioDeviceListChanged( AudioHardwarePropertyID inPropertyID, void* inClientData )
+static OSStatus	UKSoundFileRecorderAudioDeviceListChanged( AudioObjectID objectID, UInt32 numberAddresses,
+															const AudioObjectPropertyAddress addresses[], void* inClientData )
 {
 	[[NSNotificationCenter defaultCenter] postNotificationName: UKSoundFileRecorderAvailableInputDevicesChangedNotification object: nil];
 	
@@ -346,9 +356,9 @@ static OSStatus AudioInputProc( void* inRefCon, AudioUnitRenderActionFlags* ioAc
 	float	currentLevel = 0;
 	if( afr->delegateWantsLevels && ioData != NULL )
 	{
-		for( int f = 0; f < inNumberFrames; f++ )
+		for( UInt32 f = 0; f < inNumberFrames; f++ )
 		{
-			for( int b = 0; b < ioData->mNumberBuffers; b++ )
+			for( UInt32 b = 0; b < ioData->mNumberBuffers; b++ )
 			{
 				currentLevel += *((float*)((uint8_t*)ioData->mBuffers[b].mData + f * sizeof(float))) / ioData->mNumberBuffers / inNumberFrames;
 			}
@@ -392,9 +402,9 @@ cleanUp:
 					ExtAudioFileDispose( outputAudioFile );
 					outputAudioFile = NULL;
 					
-					NSString	*	errMsg = [self setupAudioFile];
-					if( errMsg )
-						NSLog( @"%@", errMsg );
+					NSError	*	errObj = [self setupAudioFile];
+					if( errObj )
+						NSLog( @"%@", errObj );
 				}
 			}
 		}
@@ -426,7 +436,14 @@ cleanUp:
 	if( outputFormat != inASBD )
 	{
 		if( isRecording )
-			[NSException raise: @"UKSoundFileRecorderBusyRecording" format: @"Can't change output format when recording has already started."];
+		{
+			if( self.errorHandler )
+			{
+				self.errorHandler( [NSError errorWithDomain: NSOSStatusErrorDomain code: ULISoundFileRecorderCantChangeAudioFormatWhileRecordingError userInfo: @{ NSLocalizedFailureReasonErrorKey: @"Can't change output format when recording has already started." }] );
+			}
+			else
+				[NSException raise: @"UKSoundFileRecorderBusyRecording" format: @"Can't change output format when recording has already started."];
+		}
 		
 		NSDictionary *oldFormat = outputFormat;
 		outputFormat = [inASBD copy];
@@ -461,16 +478,21 @@ cleanUp:
 
 -(void)		prepare
 {
-	NSString*	errStr = nil;
+	NSError*	errObj = nil;
 	
-	errStr = [self configureAU];
-	if( errStr == nil )
-		errStr = [self setupAudioFile];
+	errObj = [self configureAU];
+	if( errObj == nil )
+		errObj = [self setupAudioFile];
 	
-	if( errStr )
+	if( errObj )
 	{
 		[self cleanUp];
-		[NSException raise: @"UKSoundFileRecorderCantPrepare" format: @"%@.", errStr];
+		if( self.errorHandler )
+		{
+			self.errorHandler( errObj );
+		}
+		else
+			[NSException raise: @"UKSoundFileRecorderCantPrepare" format: @"%@.", errObj.localizedFailureReason];
 	}
 }
 
@@ -510,6 +532,10 @@ cleanUp:
 		if( delegate && [delegate respondsToSelector: @selector(soundFileRecorderWasStarted:)] )
 			[delegate soundFileRecorderWasStarted: self];
 	}
+	else if( self.errorHandler )
+	{
+		self.errorHandler( [NSError errorWithDomain: NSOSStatusErrorDomain code: err userInfo: @{ NSLocalizedFailureReasonErrorKey: [NSString stringWithFormat: @"Could not start recording (ID=%d)", err] }] );
+	}
 	else
 		[NSException raise: @"UKSoundFileRecorderCantStart" format: @"Could not start recording (ID=%d)", err];
 }
@@ -529,7 +555,14 @@ cleanUp:
 			// Stop pulling audio data
 			OSStatus err = AudioOutputUnitStop( audioUnit );
 			if( err != noErr )
-				[NSException raise: @"UKSoundFileRecorderCantStop" format: @"Could not stop recording (ID=%d)", err];
+			{
+				if( self.errorHandler )
+				{
+					self.errorHandler( [NSError errorWithDomain: NSOSStatusErrorDomain code: err userInfo: @{ NSLocalizedFailureReasonErrorKey: [NSString stringWithFormat: @"Could not stop recording (ID=%d)", err] }] );
+				}
+				else
+					[NSException raise: @"UKSoundFileRecorderCantStop" format: @"Could not stop recording (ID=%d)", err];
+			}
 		}
 		
 		[self willChangeValueForKey: @"isRecording"];
@@ -547,10 +580,13 @@ cleanUp:
 -(void)	setInputDeviceUID: (NSString*)inDeviceUID
 {
 	OSStatus	err = noErr;
+    AudioObjectPropertyAddress theAddress = { kAudioHardwarePropertyDefaultInputDevice,
+                                              kAudioObjectPropertyScopeGlobal,
+                                              kAudioObjectPropertyElementMaster };
 	if( inDeviceUID == nil )
 	{
 		UInt32		theSize = sizeof(AudioDeviceID);
-		err = AudioHardwareGetProperty( kAudioHardwarePropertyDefaultInputDevice, &theSize, &inputDeviceID );
+		err = AudioObjectGetPropertyData( kAudioObjectSystemObject, &theAddress, 0, NULL, &theSize, &inputDeviceID );
 	}
 	else
 	{
@@ -560,7 +596,8 @@ cleanUp:
 		trans.mOutputData = &inputDeviceID;
 		trans.mOutputDataSize = sizeof(AudioDeviceID);
 		UInt32		theSize = sizeof(AudioValueTranslation);
-		err = AudioHardwareGetProperty( kAudioHardwarePropertyDeviceForUID, &theSize, &trans );
+		theAddress = (AudioObjectPropertyAddress){ kAudioHardwarePropertyDeviceForUID, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMaster };
+		err = AudioObjectGetPropertyData( kAudioObjectSystemObject, &theAddress, 0, NULL, &theSize, &trans );
 	}
 	
 	if( err == noErr && inDeviceUID != inputDeviceUID )
@@ -604,7 +641,7 @@ cleanUp:
 	
 	if( audioUnit )
 	{
-		CloseComponent( audioUnit );
+		AudioComponentInstanceDispose( audioUnit );
 		audioUnit = NULL;
 	}
 }
@@ -618,30 +655,30 @@ cleanUp:
 //		Returns NIL on success, an error string on failure.
 // -----------------------------------------------------------------------------
 
--(NSString*)	setupAudioFile
+-(NSError*)	setupAudioFile
 {
 	OSStatus					err = noErr;
 	AudioConverterRef			conv = NULL;
-	NSString*					outputDirectory = [outputFilePath stringByDeletingLastPathComponent];
-	NSString*					outputFileName = [outputFilePath lastPathComponent];
-	FSRef						parentDirectory;
 	AudioStreamBasicDescription	desiredOutputFormat;
 	NSString*					fileFormatStr = [outputFormat objectForKey: UKAudioOutputFileType];
 	AudioFileTypeID				fileFormat = fileFormatStr ? UKAudioStreamFormatIDFromString( fileFormatStr ) : kAudioFileM4AType;
 	
 	if( [[NSFileManager defaultManager] fileExistsAtPath: outputFilePath] )
 	{
-		NSError*	err = nil;
-		if( ![[NSFileManager defaultManager] removeItemAtPath: outputFilePath error: &err] )
-			NSLog(@"Couldn't delete %@: %@", outputFilePath, err);
+		NSError*	errObj = nil;
+		if( ![[NSFileManager defaultManager] removeItemAtPath: outputFilePath error: &errObj] )
+		{
+			if( self.errorHandler )
+				return errObj;
+		}
 	}
 	
 	UKAudioStreamDescriptionFromDictionary( outputFormat, &desiredOutputFormat );
 	
+	NSURL * outputFileURL = nil;
 	if( outputFilePath )
 	{
-		if( ![outputDirectory getFSRef: &parentDirectory] )
-			return [NSString stringWithFormat: @"Could not get reference to directory \"%@\"",outputDirectory];
+		outputFileURL = [NSURL fileURLWithPath: outputFilePath];
 	}
 	
 	if( outputAudioFile != NULL )	// Have an audio file already? Get rid of that. IMPORTANT for setOutputFilePath:, which relies on this not calling cleanUp and stopping the player when it's just being used to start a new segment.
@@ -650,13 +687,19 @@ cleanUp:
 	if( outputFilePath )
 	{
 		// Create new MP4 file (kAudioFileM4AType)
-		err = ExtAudioFileCreateNew( &parentDirectory, (CFStringRef)outputFileName, fileFormat, &desiredOutputFormat, NULL, &outputAudioFile );
+		NSURL	*	theURL = outputFileURL.absoluteURL;
+		err = ExtAudioFileCreateWithURL( (CFURLRef)theURL,
+							fileFormat,
+							&desiredOutputFormat,
+							NULL,
+                    		kAudioFileFlags_EraseFile,
+							&outputAudioFile );
 		if( err != noErr )
 		{
 			char formatID[5];
 			*(UInt32 *)formatID = CFSwapInt32HostToBig(err);
 			formatID[4] = '\0';
-			return [NSString stringWithFormat: @"Could not create the audio file (ID=%d/'%-4.4s')",err, formatID];
+			return [NSError errorWithDomain: NSOSStatusErrorDomain code: err userInfo: @{ NSLocalizedFailureReasonErrorKey: [NSString stringWithFormat: @"Could not create the audio file (ID=%d/'%-4.4s')", err, formatID] }];
 		}
 
 		// Inform the file what format the data is we're going to give it, should be pcm
@@ -667,7 +710,7 @@ cleanUp:
 			char formatID[5];
 			*(UInt32 *)formatID = CFSwapInt32HostToBig(err);
 			formatID[4] = '\0';
-			return [NSString stringWithFormat: @"Could not set up data format for output file (ID=%d/'%-4.4s')",err, formatID];
+			return [NSError errorWithDomain: NSOSStatusErrorDomain code: err userInfo: @{ NSLocalizedFailureReasonErrorKey: [NSString stringWithFormat: @"Could not set up data format for output file (ID=%d/'%-4.4s')", err, formatID] }];
 		}
 
 		// If we're recording from a mono source, setup a simple channel map to split to stereo
@@ -692,7 +735,7 @@ cleanUp:
 			char formatID[5];
 			*(UInt32 *)formatID = CFSwapInt32HostToBig(err);
 			formatID[4] = '\0';
-			return [NSString stringWithFormat: @"Could not initialize asynchronous writing (ID=%d/'%-4.4s')",err, formatID];
+			return [NSError errorWithDomain: NSOSStatusErrorDomain code: err userInfo: @{ NSLocalizedFailureReasonErrorKey: [NSString stringWithFormat: @"Could not initialize asynchronous writing (ID=%d/'%-4.4s')", err, formatID] }];
 		}
 	}
 
@@ -707,17 +750,17 @@ cleanUp:
 //		Returns NIL on success, an error string on failure.
 // -----------------------------------------------------------------------------
 
--(NSString*)	configureAU
+-(NSError*)	configureAU
 {
-	Component					component = NULL;
-	ComponentDescription		description;
+	AudioComponent				component = NULL;
+	AudioComponentDescription	description;
 	OSStatus					err = noErr;
 	UInt32						param;
 	AURenderCallbackStruct		callback;
 	
 	if( audioUnit )
 	{
-		CloseComponent( audioUnit );
+		AudioComponentInstanceDispose( audioUnit );
 		audioUnit = NULL;
 	}
 	canDoMetering = NO;
@@ -731,13 +774,13 @@ cleanUp:
 	description.componentManufacturer = kAudioUnitManufacturer_Apple;
 	description.componentFlags = 0;
 	description.componentFlagsMask = 0;
-	if(( component = FindNextComponent( NULL, &description ) ))
+	if(( component = AudioComponentFindNext( NULL, &description ) ))
 	{
-		err = OpenAComponent( component, &audioUnit );
+		err = AudioComponentInstanceNew( component, &audioUnit );
 		if( err != noErr )
 		{
 			audioUnit = NULL;
-			return [NSString stringWithFormat: @"Couldn't open AudioUnit component (ID=%d)", err];
+			return [NSError errorWithDomain: NSOSStatusErrorDomain code: err userInfo: @{ NSLocalizedFailureReasonErrorKey: [NSString stringWithFormat: @"Couldn't open AudioUnit component (ID=%d)", err] }];
 		}
 	}
 
@@ -758,7 +801,7 @@ cleanUp:
 		if( err != noErr )
 		{
 			[self cleanUp];
-			return [NSString stringWithFormat: @"Couldn't set EnableIO property on the audio unit (ID=%d)", err];
+			return [NSError errorWithDomain: NSOSStatusErrorDomain code: err userInfo: @{ NSLocalizedFailureReasonErrorKey: [NSString stringWithFormat: @"Couldn't set EnableIO property on the audio unit (ID=%d)", err] }];
 		}
 	}
 
@@ -768,14 +811,17 @@ cleanUp:
 		[inputDeviceUID release];
 		inputDeviceUID = nil;
 		param = sizeof(AudioDeviceID);
-		err = AudioHardwareGetProperty( kAudioHardwarePropertyDefaultInputDevice, &param, &inputDeviceID );
+		AudioObjectPropertyAddress theAddress = { kAudioHardwarePropertyDefaultInputDevice,
+													kAudioObjectPropertyScopeGlobal,
+													kAudioObjectPropertyElementMaster };
+		err = AudioObjectGetPropertyData( kAudioObjectSystemObject, &theAddress, 0, NULL, &param, &inputDeviceID );
 	}
 	else
 		err = noErr;
 	if(err != noErr )
 	{
 		[self cleanUp];
-		return [NSString stringWithFormat: @"Couldn't get sound input device (ID=%d)", err];
+		return [NSError errorWithDomain: NSOSStatusErrorDomain code: err userInfo: @{ NSLocalizedFailureReasonErrorKey: [NSString stringWithFormat: @"Couldn't get sound input device (ID=%d)", err] }];
 	}
 	
 	// Set the current device to the selected input unit.
@@ -783,7 +829,7 @@ cleanUp:
 	if(err != noErr)
 	{
 		[self cleanUp];
-		return [NSString stringWithFormat: @"Failed to hook up input device to our AudioUnit (ID=%d)", err];
+		return [NSError errorWithDomain: NSOSStatusErrorDomain code: err userInfo: @{ NSLocalizedFailureReasonErrorKey: [NSString stringWithFormat: @"Failed to hook up input device to our AudioUnit (ID=%d)", err] }];
 	}
 	
 	err = AudioUnitSetProperty( audioUnit, kAudioUnitProperty_MeteringMode, kAudioUnitScope_Output, 1, &param, sizeof(UInt32) );
@@ -797,17 +843,18 @@ cleanUp:
 	if(err != noErr)
 	{
 		[self cleanUp];
-		return [NSString stringWithFormat: @"Could not install render callback on our AudioUnit (ID=%d)", err];
+		return [NSError errorWithDomain: NSOSStatusErrorDomain code: err userInfo: @{ NSLocalizedFailureReasonErrorKey: [NSString stringWithFormat: @"Could not install render callback on our AudioUnit (ID=%d)", err] }];
 	}
 	
 
 	{
 		Float64 rate;
 		param = sizeof(rate);
-
-		err = AudioDeviceGetProperty(inputDeviceID, 0, true,
-						kAudioDevicePropertyNominalSampleRate,
-						&param, &rate);
+		
+		AudioObjectPropertyAddress	address = { kAudioDevicePropertyNominalSampleRate,
+												kAudioObjectPropertyScopeGlobal,
+												kAudioObjectPropertyElementMaster };
+		err = AudioObjectGetPropertyData( inputDeviceID, &address, 0, NULL, &param, &rate );
 		if (err == noErr)
 		{
 			NSNumber*	num = [outputFormat objectForKey: UKAudioStreamSampleRate];
@@ -815,17 +862,12 @@ cleanUp:
 			{
 				rate = [num doubleValue];
 				
-				err = AudioDeviceSetProperty(inputDeviceID, NULL, 0, true,
-								kAudioDevicePropertyNominalSampleRate,
-								sizeof(rate), &rate);
-				
+				err = AudioObjectSetPropertyData( inputDeviceID, &address, 0, NULL, sizeof(rate), &rate );
 				if (err != noErr)
 				{
 					rate = rate < 32000 ? rate * 2 : rate / 2;
 					
-					err = AudioDeviceSetProperty(inputDeviceID, NULL, 0, true,
-								kAudioDevicePropertyNominalSampleRate,
-								sizeof(rate), &rate);
+					err = AudioObjectSetPropertyData( inputDeviceID, &address, 0, NULL, sizeof(rate), &rate );				
 				}
 			}
 		}
@@ -841,7 +883,7 @@ cleanUp:
 	if(err != noErr)
 	{
 		[self cleanUp];
-		return [NSString stringWithFormat: @"Could not install render callback on our AudioUnit (ID=%d)", err];
+		return [NSError errorWithDomain: NSOSStatusErrorDomain code: err userInfo: @{ NSLocalizedFailureReasonErrorKey: [NSString stringWithFormat: @"Could not install render callback on our AudioUnit (ID=%d)", err] }];
 	}
 	
 	// Twiddle the format to our liking
@@ -868,7 +910,7 @@ cleanUp:
 	if(err != noErr)
 	{
 		[self cleanUp];
-		return [NSString stringWithFormat: @"Could not change the stream format of the output device (ID=%d)", err];
+		return [NSError errorWithDomain: NSOSStatusErrorDomain code: err userInfo: @{ NSLocalizedFailureReasonErrorKey: [NSString stringWithFormat: @"Could not change the stream format of the output device (ID=%d)", err] }];
 	}
 	
 	param = sizeof(AudioStreamBasicDescription);
@@ -877,7 +919,7 @@ cleanUp:
 	if(err != noErr)
 	{
 		[self cleanUp];
-		return [NSString stringWithFormat: @"Could not retrieve the stream format of the output device (ID=%d)", err];
+		return [NSError errorWithDomain: NSOSStatusErrorDomain code: err userInfo: @{ NSLocalizedFailureReasonErrorKey: [NSString stringWithFormat: @"Could not retrieve the stream format of the output device (ID=%d)", err] }];
 	}
 	[actualOutputFormatDict release];	// Make sure next guy who asks for it gets a new lazily-allocated conversion.
 	actualOutputFormatDict = nil;
@@ -889,7 +931,7 @@ cleanUp:
 		if( err != noErr )
 		{
 			[self cleanUp];
-			return [NSString stringWithFormat: @"Error %d setting channel map.", err ];
+			return [NSError errorWithDomain: NSOSStatusErrorDomain code: err userInfo: @{ NSLocalizedFailureReasonErrorKey: [NSString stringWithFormat: @"Error %d setting channel map.", err ] }];
 		}
 	}
 
@@ -899,7 +941,7 @@ cleanUp:
 	if(err != noErr)
 	{
 		[self cleanUp];
-		return [NSString stringWithFormat: @"Could not determine audio sample size (ID=%d)", err];
+		return [NSError errorWithDomain: NSOSStatusErrorDomain code: err userInfo: @{ NSLocalizedFailureReasonErrorKey: [NSString stringWithFormat: @"Could not determine audio sample size (ID=%d)", err] }];
 	}
 	
 	// Initialize the AU
@@ -907,7 +949,7 @@ cleanUp:
 	if(err != noErr)
 	{
 		[self cleanUp];
-		return [NSString stringWithFormat: @"Could not initialize the AudioUnit (ID=%d)", err];
+		return [NSError errorWithDomain: NSOSStatusErrorDomain code: err userInfo: @{ NSLocalizedFailureReasonErrorKey: [NSString stringWithFormat: @"Could not initialize the AudioUnit (ID=%d)", err] }];
 	}
 	
 	// Allocate our audio buffers
@@ -915,7 +957,7 @@ cleanUp:
 	if( audioBuffer == NULL )
 	{
 		[self cleanUp];
-		return [NSString stringWithFormat: @"Could not allocate buffers for recording (ID=%d)", err];
+		return [NSError errorWithDomain: NSOSStatusErrorDomain code: err userInfo: @{ NSLocalizedFailureReasonErrorKey: [NSString stringWithFormat: @"Could not allocate buffers for recording (ID=%d)", err] }];
 	}
 	
 	return nil;

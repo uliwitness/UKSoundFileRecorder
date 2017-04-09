@@ -88,6 +88,8 @@
 //-(id)				init;	// Designated initializer. You can use -init and then do setOutputFilePath: or use -initWithOutputFilePath:.
 -(id)				initWithOutputFilePath: (NSString*)ofp;	
 
+@property void (^errorHandler)(NSError *err);
+
 // Setup:
 -(void)				setOutputFilePath: (NSString*)ofp;			// If you set no path, the delegate *must* implement -soundFileRecorder:receivedFrames:count:seconds:.
 -(NSString*)		outputFilePath;
@@ -172,4 +174,14 @@ extern NSString*	UKSoundFileRecorderAvailableInputDevicesChangedNotification;
 
 @end
 
+
+// -----------------------------------------------------------------------------
+//	NSError keys:
+// -----------------------------------------------------------------------------
+
+extern NSString* ULISoundFileRecorderErrorDomain;
+enum
+{
+	ULISoundFileRecorderCantChangeAudioFormatWhileRecordingError = -13762
+};
 
