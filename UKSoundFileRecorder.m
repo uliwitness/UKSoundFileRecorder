@@ -66,7 +66,7 @@ static int32_t	UKInt32FromOSStatus( OSStatus inErr )
 -(NSError*)			configureAU;		// Returns error string, NIL on success.
 -(AudioBufferList*)	allocateAudioBufferListWithNumChannels: (UInt32)numChannels size: (UInt32)size;
 -(void)				destroyAudioBufferList: (AudioBufferList*)list;
--(void)				notifyDelegateOfTimeChange: (NSNumber*)currentAmps;
+-(void)				notifyDelegateOfTimeChangeAndAmplitude: (NSNumber*)currentAmps;
 
 @end
 
@@ -366,7 +366,7 @@ static OSStatus AudioInputProc( void* inRefCon, AudioUnitRenderActionFlags* ioAc
 	}
 	
 	if( afr->isRecording && (afr->delegateWantsTimeChanges || afr->delegateWantsLevels) )	// Don't waste time syncing to other threads if nobody is listening:
-		[afr performSelectorOnMainThread: @selector(notifyDelegateOfTimeChange:) withObject: [NSNumber numberWithFloat: currentLevel] waitUntilDone: NO];
+		[afr performSelectorOnMainThread: @selector(notifyDelegateOfTimeChangeAndAmplitude:) withObject: [NSNumber numberWithFloat: currentLevel] waitUntilDone: NO];
 	
 cleanUp:
 	[pool release];
