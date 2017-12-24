@@ -1020,7 +1020,7 @@ cleanUp:
 }
 
 // Used by our AudioInputProc to easily call this delegate method from another thread:
--(void)	notifyDelegateOfTimeChange: (NSNumber*)currentAmps
+-(void)	notifyDelegateOfTimeChangeAndAmplitude: (NSNumber*)currentAmps
 {
 	if( isRecording )	// In case we queued one up but were already finished by the time it got executed.
 	{
