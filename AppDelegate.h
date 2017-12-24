@@ -10,12 +10,13 @@
 #import "UKSoundFileRecorder.h"
 
 
-@interface AppDelegate : NSObject
+@interface AppDelegate : NSObject <UKSoundFileRecorderDelegate>
 {
 	IBOutlet UKSoundFileRecorder*		recorder;
 	IBOutlet NSTextField*				pathField;
 	IBOutlet NSTextField*				statusField;
 	IBOutlet NSTextField*				levelField;
+	IBOutlet NSPopUpButton*				devicePopUp;
 }
 
 @end

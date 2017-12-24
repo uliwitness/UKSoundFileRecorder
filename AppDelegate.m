@@ -13,9 +13,39 @@
 
 -(void)	awakeFromNib
 {
+	[self rebuildDevicesMenu];
 	[recorder takeOutputFilePathFrom: pathField];
 	[recorder setDelegate: self];
+	
+	[[NSNotificationCenter defaultCenter] addObserver: self selector: @selector(rebuildDevicesMenu) name: UKSoundFileRecorderAvailableInputDevicesChangedNotification object: recorder];
 }
+
+
+-(void) rebuildDevicesMenu
+{
+	NSString * selectedDeviceUID = recorder.inputDeviceUID;
+	NSMenu * devicesMenu = [devicePopUp menu];
+	[devicesMenu removeAllItems];
+	
+	for( NSDictionary<NSString*,NSString*> * deviceEntry in [UKSoundFileRecorder availableInputDevices] )
+	{
+		NSMenuItem * newItem = [[NSMenuItem alloc] initWithTitle: deviceEntry[UKSoundFileRecorderDeviceName] action: NULL keyEquivalent: @""];
+		NSString * currentDeviceUID = deviceEntry[UKSoundFileRecorderDeviceUID];
+		newItem.representedObject = currentDeviceUID;
+		[devicesMenu addItem: newItem];
+		if( [selectedDeviceUID isEqualToString: currentDeviceUID] )
+			[devicePopUp selectItem: newItem];
+	}
+}
+
+
+-(IBAction) devicePopUpSelectionChanged: (id)sender
+{
+	NSMenuItem * selectedItem = devicePopUp.selectedItem;
+	NSString * deviceUID = selectedItem.representedObject;
+	[recorder setInputDeviceUID: deviceUID];
+}
+
 
 -(void)	soundFileRecorderWasStarted: (UKSoundFileRecorder*)sender
 {
