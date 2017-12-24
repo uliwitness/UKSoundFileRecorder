@@ -13,7 +13,9 @@
 		3D59F60D0C5B57EF00AAEBE2 /* AudioToolbox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3D59F60C0C5B57EF00AAEBE2 /* AudioToolbox.framework */; };
 		3D59F6160C5B580B00AAEBE2 /* CoreAudio.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3D59F5FC0C5B57A500AAEBE2 /* CoreAudio.framework */; };
 		3D59F61A0C5B581800AAEBE2 /* AudioUnit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3D59F6070C5B57D400AAEBE2 /* AudioUnit.framework */; };
-		8D11072A0486CEB800E47090 /* MainMenu.nib in Resources */ = {isa = PBXBuildFile; fileRef = 29B97318FDCFA39411CA2CEA /* MainMenu.nib */; };
+		551A1D5F1FEFD1BC00D15145 /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = 551A1D5D1FEFD1BC00D15145 /* MainMenu.xib */; };
+		551A1D641FEFE06C00D15145 /* record_symbol.pdf in Resources */ = {isa = PBXBuildFile; fileRef = 551A1D601FEFE06C00D15145 /* record_symbol.pdf */; };
+		551A1D651FEFE06C00D15145 /* stop_symbol.pdf in Resources */ = {isa = PBXBuildFile; fileRef = 551A1D621FEFE06C00D15145 /* stop_symbol.pdf */; };
 		8D11072B0486CEB800E47090 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 089C165CFE840E0CC02AAC07 /* InfoPlist.strings */; };
 		8D11072D0486CEB800E47090 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 29B97316FDCFA39411CA2CEA /* main.m */; settings = {ATTRIBUTES = (); }; };
 		8D11072F0486CEB800E47090 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1058C7A1FEA54F0111CA2CBB /* Cocoa.framework */; };
@@ -24,7 +26,6 @@
 		1058C7A1FEA54F0111CA2CBB /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = /System/Library/Frameworks/Cocoa.framework; sourceTree = "<absolute>"; };
 		13E42FB307B3F0F600E4EEF1 /* CoreData.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreData.framework; path = /System/Library/Frameworks/CoreData.framework; sourceTree = "<absolute>"; };
 		29B97316FDCFA39411CA2CEA /* main.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
-		29B97319FDCFA39411CA2CEA /* English */ = {isa = PBXFileReference; lastKnownFileType = wrapper.nib; name = English; path = English.lproj/MainMenu.nib; sourceTree = "<group>"; };
 		29B97324FDCFA39411CA2CEA /* AppKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppKit.framework; path = /System/Library/Frameworks/AppKit.framework; sourceTree = "<absolute>"; };
 		29B97325FDCFA39411CA2CEA /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = /System/Library/Frameworks/Foundation.framework; sourceTree = "<absolute>"; };
 		32CA4F630368D1EE00C91783 /* UKSoundRecorder_Prefix.pch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = UKSoundRecorder_Prefix.pch; sourceTree = "<group>"; };
@@ -37,6 +38,9 @@
 		3D59F5FC0C5B57A500AAEBE2 /* CoreAudio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudio.framework; path = /System/Library/Frameworks/CoreAudio.framework; sourceTree = "<absolute>"; };
 		3D59F6070C5B57D400AAEBE2 /* AudioUnit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AudioUnit.framework; path = /System/Library/Frameworks/AudioUnit.framework; sourceTree = "<absolute>"; };
 		3D59F60C0C5B57EF00AAEBE2 /* AudioToolbox.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AudioToolbox.framework; path = /System/Library/Frameworks/AudioToolbox.framework; sourceTree = "<absolute>"; };
+		551A1D5E1FEFD1BC00D15145 /* English */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = English; path = English.lproj/MainMenu.xib; sourceTree = "<group>"; };
+		551A1D611FEFE06C00D15145 /* English */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; name = English; path = English.lproj/record_symbol.pdf; sourceTree = "<group>"; };
+		551A1D631FEFE06C00D15145 /* English */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; name = English; path = English.lproj/stop_symbol.pdf; sourceTree = "<group>"; };
 		8D1107310486CEB800E47090 /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		8D1107320486CEB800E47090 /* UKSoundRecorder.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = UKSoundRecorder.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -124,7 +128,9 @@
 			children = (
 				8D1107310486CEB800E47090 /* Info.plist */,
 				089C165CFE840E0CC02AAC07 /* InfoPlist.strings */,
-				29B97318FDCFA39411CA2CEA /* MainMenu.nib */,
+				551A1D5D1FEFD1BC00D15145 /* MainMenu.xib */,
+				551A1D601FEFE06C00D15145 /* record_symbol.pdf */,
+				551A1D621FEFE06C00D15145 /* stop_symbol.pdf */,
 			);
 			name = Resources;
 			sourceTree = "<group>";
@@ -172,6 +178,7 @@
 			hasScannedForEncodings = 1;
 			knownRegions = (
 				en,
+				English,
 			);
 			mainGroup = 29B97314FDCFA39411CA2CEA /* UKSoundRecorder */;
 			projectDirPath = "";
@@ -187,8 +194,10 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				8D11072A0486CEB800E47090 /* MainMenu.nib in Resources */,
 				8D11072B0486CEB800E47090 /* InfoPlist.strings in Resources */,
+				551A1D641FEFE06C00D15145 /* record_symbol.pdf in Resources */,
+				551A1D651FEFE06C00D15145 /* stop_symbol.pdf in Resources */,
+				551A1D5F1FEFD1BC00D15145 /* MainMenu.xib in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -217,12 +226,28 @@
 			name = InfoPlist.strings;
 			sourceTree = "<group>";
 		};
-		29B97318FDCFA39411CA2CEA /* MainMenu.nib */ = {
+		551A1D5D1FEFD1BC00D15145 /* MainMenu.xib */ = {
 			isa = PBXVariantGroup;
 			children = (
-				29B97319FDCFA39411CA2CEA /* English */,
+				551A1D5E1FEFD1BC00D15145 /* English */,
 			);
-			name = MainMenu.nib;
+			name = MainMenu.xib;
+			sourceTree = "<group>";
+		};
+		551A1D601FEFE06C00D15145 /* record_symbol.pdf */ = {
+			isa = PBXVariantGroup;
+			children = (
+				551A1D611FEFE06C00D15145 /* English */,
+			);
+			name = record_symbol.pdf;
+			sourceTree = "<group>";
+		};
+		551A1D621FEFE06C00D15145 /* stop_symbol.pdf */ = {
+			isa = PBXVariantGroup;
+			children = (
+				551A1D631FEFE06C00D15145 /* English */,
+			);
+			name = stop_symbol.pdf;
 			sourceTree = "<group>";
 		};
 /* End PBXVariantGroup section */
