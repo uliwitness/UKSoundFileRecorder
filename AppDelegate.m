@@ -16,6 +16,7 @@
 	[self rebuildDevicesMenu];
 	[recorder takeOutputFilePathFrom: pathField];
 	[recorder setDelegate: self];
+	[recorder setInputDeviceUID: [UKSoundFileRecorder availableInputDevices].firstObject[UKSoundFileRecorderDeviceUID]];
 	
 	[[NSNotificationCenter defaultCenter] addObserver: self selector: @selector(rebuildDevicesMenu) name: UKSoundFileRecorderAvailableInputDevicesChangedNotification object: recorder];
 }
@@ -49,7 +50,7 @@
 
 -(void)	soundFileRecorderWasStarted: (UKSoundFileRecorder*)sender
 {
-	[statusField setStringValue: @"Recording..."];
+	[statusField setStringValue: [NSString stringWithFormat: @"Recording from %@...", recorder.inputDeviceName]];
 }
 
 -(void)	soundFileRecorder: (UKSoundFileRecorder*)sender reachedDuration: (NSTimeInterval)timeInSeconds

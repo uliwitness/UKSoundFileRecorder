@@ -613,6 +613,18 @@ cleanUp:
 	return inputDeviceUID;
 }
 
+
+-(NSString*)	inputDeviceName
+{
+	NSArray<NSDictionary<NSString*,NSString*>*>* devices = [self.class availableInputDevices];
+	for( NSDictionary<NSString*,NSString*>* currDevice in devices )
+	{
+		if( [currDevice[UKSoundFileRecorderDeviceUID] isEqualToString: inputDeviceUID] )
+			return currDevice[UKSoundFileRecorderDeviceName];
+	}
+	return nil;
+}
+
 @end
 
 

@@ -109,6 +109,7 @@
 
 -(void)				setInputDeviceUID: (NSString*)inString;	// Pass NIL for the system default input device as set in System Preferences.app
 -(NSString*)		inputDeviceUID;
+-(NSString*)		inputDeviceName;
 
 // You probably don't need this:
 -(void)				prepare;		// Called as needed by start:, if nobody called it before that.
