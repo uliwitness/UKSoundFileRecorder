@@ -74,7 +74,7 @@
 	
 	BOOL						isRecording;
 	
-	id							delegate;
+	__weak NSObject<UKSoundFileRecorderDelegate> * delegate;
 	BOOL						delegateWantsTimeChanges;
 	BOOL						delegateWantsLevels;
 	BOOL						canDoMetering;
@@ -99,8 +99,7 @@
 -(NSDictionary*)	outputFormat;
 -(NSDictionary*)	actualOutputFormat;
 
--(void)								setDelegate: (id<UKSoundFileRecorderDelegate>)dele;
--(id<UKSoundFileRecorderDelegate>)	delegate;
+@property (weak) NSObject<UKSoundFileRecorderDelegate> * delegate;
 
 // Recording:
 -(void)				start: (id)sender;
@@ -110,6 +109,8 @@
 -(void)				setInputDeviceUID: (NSString*)inString;	// Pass NIL for the system default input device as set in System Preferences.app
 -(NSString*)		inputDeviceUID;
 -(NSString*)		inputDeviceName;
+
+-(NSTimeInterval)	duration;
 
 // You probably don't need this:
 -(void)				prepare;		// Called as needed by start:, if nobody called it before that.

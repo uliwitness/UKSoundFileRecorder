@@ -25,6 +25,10 @@
 //	   distribution.
 //
 
+#if !__has_feature(objc_arc)
+#error This file must be compiled with automated reference counting actimated.
+#endif
+
 // -----------------------------------------------------------------------------
 //	Headers:
 // -----------------------------------------------------------------------------
@@ -123,7 +127,8 @@ static int32_t	UKInt32FromOSStatus( OSStatus inErr )
 	status = AudioObjectGetPropertyData(kAudioObjectSystemObject, &propertyAddress, 0, NULL, &dataSize, audioDevices);
 	if(kAudioHardwareNoError != status)
 	{
-		free(audioDevices), audioDevices = NULL;
+		free(audioDevices);
+		audioDevices = NULL;
 		return NULL;
 	}
 		
@@ -138,6 +143,7 @@ static int32_t	UKInt32FromOSStatus( OSStatus inErr )
 		status = AudioObjectGetPropertyData(audioDevices[i], &propertyAddress, 0, NULL, &dataSize, &deviceUID);
 		if(kAudioHardwareNoError != status)
 			continue;
+		NSString * objcDeviceUID = CFBridgingRelease(deviceUID);
 		
 		// Query device name
 		CFStringRef deviceName = NULL;
@@ -161,7 +167,7 @@ static int32_t	UKInt32FromOSStatus( OSStatus inErr )
 				continue;
 		}
 		
-		[(id)deviceName autorelease];
+		NSString * objcDeviceName = CFBridgingRelease(deviceName);
 
 		// Query device manufacturer
 		CFStringRef deviceManufacturer = NULL;
@@ -170,7 +176,8 @@ static int32_t	UKInt32FromOSStatus( OSStatus inErr )
 		status = AudioObjectGetPropertyData(audioDevices[i], &propertyAddress, 0, NULL, &dataSize, &deviceManufacturer);
 		if(kAudioHardwareNoError != status)
 			continue;
-		
+		NSString * objcDeviceManufacturer = CFBridgingRelease(deviceManufacturer);
+
 		// Determine if the device is an input device (it is an input device if it has input channels)
 		dataSize = 0;
 		propertyAddress.mSelector = kAudioDevicePropertyStreamConfiguration;
@@ -185,18 +192,21 @@ static int32_t	UKInt32FromOSStatus( OSStatus inErr )
 		status = AudioObjectGetPropertyData(audioDevices[i], &propertyAddress, 0, NULL, &dataSize, bufferList);
 		if(kAudioHardwareNoError != status || 0 == bufferList->mNumberBuffers)
 		{
-			free(bufferList), bufferList = NULL;
+			free(bufferList);
+			bufferList = NULL;
 			continue;
 		}
 		
-		free(bufferList), bufferList = NULL;
+		free(bufferList);
+		bufferList = NULL;
 		
 		// Add a dictionary for this device to the array of input devices
-		NSDictionary	*	deviceDictionary = [NSDictionary dictionaryWithObjectsAndKeys: (NSString*)deviceUID, UKSoundFileRecorderDeviceUID, (NSString*)deviceName, UKSoundFileRecorderDeviceName, (NSString*)deviceManufacturer, UKSoundFileRecorderDeviceManufacturer, nil];
+		NSDictionary	*	deviceDictionary = [NSDictionary dictionaryWithObjectsAndKeys: objcDeviceUID, UKSoundFileRecorderDeviceUID, objcDeviceName, UKSoundFileRecorderDeviceName, objcDeviceManufacturer, UKSoundFileRecorderDeviceManufacturer, nil];
 		[names addObject: deviceDictionary];
 	}
 	
-	free(audioDevices), audioDevices = NULL;
+	free(audioDevices);
+	audioDevices = NULL;
 	
 	if( !sDidSubscribeForDeviceChanges )
 	{
@@ -271,17 +281,11 @@ static OSStatus	UKSoundFileRecorderAudioDeviceListChanged( AudioObjectID objectI
 	NS_ENDHANDLER
 	[self destroyAudioBufferList: audioBuffer];
 	
-	[outputFilePath release];
 	outputFilePath = nil;
 	
-	[actualOutputFormatDict release];
 	actualOutputFormatDict = nil;
-	[outputFormat release];
 	outputFormat = nil;
-	[inputDeviceUID release];
 	inputDeviceUID = nil;
-	
-	[super dealloc];
 }
 
 
@@ -289,16 +293,16 @@ static OSStatus	UKSoundFileRecorderAudioDeviceListChanged( AudioObjectID objectI
 //	Delegate accessors:
 // -----------------------------------------------------------------------------
 
--(void)	setDelegate: (id<UKSoundFileRecorderDelegate>)dele
+-(void)	setDelegate: (NSObject<UKSoundFileRecorderDelegate> *)dele
 {
-	delegate = dele;	// Don't retain delegate, it's very likely our owner. Wouldn't want a retain circle!
+	delegate = dele;
 	delegateWantsTimeChanges = (delegate && [delegate respondsToSelector: @selector(soundFileRecorder:reachedDuration:)]);
 	delegateWantsLevels = (delegate && [delegate respondsToSelector: @selector(soundFileRecorder:hasAmplitude:)]);
 	delegateWantsRawFrames = (delegate && [delegate respondsToSelector: @selector(soundFileRecorder:receivedFrames:count:seconds:)]);
 }
 
 
--(id<UKSoundFileRecorderDelegate>)	delegate
+-(NSObject<UKSoundFileRecorderDelegate> *)	delegate
 {
 	return delegate;
 }
@@ -313,63 +317,64 @@ static OSStatus	UKSoundFileRecorderAudioDeviceListChanged( AudioObjectID objectI
 
 static OSStatus AudioInputProc( void* inRefCon, AudioUnitRenderActionFlags* ioActionFlags, const AudioTimeStamp* inTimeStamp, UInt32 inBusNumber, UInt32 inNumberFrames, AudioBufferList* ioData)
 {
-	NSAutoreleasePool	*	pool = [[NSAutoreleasePool alloc] init];
-	UKSoundFileRecorder *	afr = (UKSoundFileRecorder*)inRefCon;
 	OSStatus				err = noErr;
+	@autoreleasepool
+	{
+		UKSoundFileRecorder *	afr = (__bridge UKSoundFileRecorder*)inRefCon;
 
-	// Render into audio buffer
-	err = AudioUnitRender( afr->audioUnit, ioActionFlags, inTimeStamp,
-							inBusNumber, inNumberFrames, afr->audioBuffer);
-	if( err )
-	{
-		//fprintf( stderr, "AudioUnitRender() failed with error %d\n", UKInt32FromOSStatus(err) );
-	}
-	
-	UInt64	nanos = AudioConvertHostTimeToNanos( inTimeStamp->mHostTime -afr->startHostTime );
-	afr->currSeconds = ((double)nanos) * 0.000000001;
-	
-	err = noErr;
-	
-	@synchronized( afr )
-	{
-		if( afr->outputAudioFile )
+		// Render into audio buffer
+		err = AudioUnitRender( afr->audioUnit, ioActionFlags, inTimeStamp,
+								inBusNumber, inNumberFrames, afr->audioBuffer);
+		if( err )
 		{
-			// Write to file, ExtAudioFile auto-magicly handles conversion/encoding
-			// NOTE: Async writes may not be flushed to disk until the file
-			// reference is disposed using ExtAudioFileDispose
-			err = ExtAudioFileWriteAsync( afr->outputAudioFile, inNumberFrames, afr->audioBuffer);
+			//fprintf( stderr, "AudioUnitRender() failed with error %d\n", UKInt32FromOSStatus(err) );
 		}
-	}
-	
-	if( err != noErr )
-	{
-		char	formatID[5] = { 0 };
-		*(UInt32 *)formatID = CFSwapInt32HostToBig(err);
-		formatID[4] = '\0';
-		fprintf(stderr, "ExtAudioFileWrite FAILED! %d '%-4.4s'\n", UKInt32FromOSStatus(err), formatID);
-		goto cleanUp;
-	}
-	
-	if( afr->delegateWantsRawFrames )
-		[afr->delegate soundFileRecorder: afr receivedFrames: afr->audioBuffer count: inNumberFrames seconds:afr->currSeconds];
-
-	float	currentLevel = 0;
-	if( afr->delegateWantsLevels && ioData != NULL )
-	{
-		for( UInt32 f = 0; f < inNumberFrames; f++ )
+		
+		UInt64	nanos = AudioConvertHostTimeToNanos( inTimeStamp->mHostTime -afr->startHostTime );
+		afr->currSeconds = ((double)nanos) * 0.000000001;
+		
+		err = noErr;
+		
+		@synchronized( afr )
 		{
-			for( UInt32 b = 0; b < ioData->mNumberBuffers; b++ )
+			if( afr->outputAudioFile )
 			{
-				currentLevel += *((float*)((uint8_t*)ioData->mBuffers[b].mData + f * sizeof(float))) / ioData->mNumberBuffers / inNumberFrames;
+				// Write to file, ExtAudioFile auto-magicly handles conversion/encoding
+				// NOTE: Async writes may not be flushed to disk until the file
+				// reference is disposed using ExtAudioFileDispose
+				err = ExtAudioFileWriteAsync( afr->outputAudioFile, inNumberFrames, afr->audioBuffer);
 			}
 		}
+		
+		if( err != noErr )
+		{
+			char	formatID[5] = { 0 };
+			*(UInt32 *)formatID = CFSwapInt32HostToBig(err);
+			formatID[4] = '\0';
+			fprintf(stderr, "ExtAudioFileWrite FAILED! %d '%-4.4s'\n", UKInt32FromOSStatus(err), formatID);
+			goto cleanUp;
+		}
+		
+		if( afr->delegateWantsRawFrames )
+			[afr->delegate soundFileRecorder: afr receivedFrames: afr->audioBuffer count: inNumberFrames seconds:afr->currSeconds];
+
+		float	currentLevel = 0;
+		if( afr->delegateWantsLevels && ioData != NULL )
+		{
+			for( UInt32 f = 0; f < inNumberFrames; f++ )
+			{
+				for( UInt32 b = 0; b < ioData->mNumberBuffers; b++ )
+				{
+					currentLevel += *((float*)((uint8_t*)ioData->mBuffers[b].mData + f * sizeof(float))) / ioData->mNumberBuffers / inNumberFrames;
+				}
+			}
+		}
+		
+		if( afr->isRecording && (afr->delegateWantsTimeChanges || afr->delegateWantsLevels) )	// Don't waste time syncing to other threads if nobody is listening:
+			[afr performSelectorOnMainThread: @selector(notifyDelegateOfTimeChangeAndAmplitude:) withObject: [NSNumber numberWithFloat: currentLevel] waitUntilDone: NO];
 	}
 	
-	if( afr->isRecording && (afr->delegateWantsTimeChanges || afr->delegateWantsLevels) )	// Don't waste time syncing to other threads if nobody is listening:
-		[afr performSelectorOnMainThread: @selector(notifyDelegateOfTimeChangeAndAmplitude:) withObject: [NSNumber numberWithFloat: currentLevel] waitUntilDone: NO];
-	
 cleanUp:
-	[pool release];
 	
 	return err;
 }
@@ -384,11 +389,10 @@ cleanUp:
 {
 	if( outputFilePath == nil || ![inOutputFilePath isEqualToString: outputFilePath] )
 	{
-		if( outputFilePath == nil )
+		if( outputFilePath != nil )
 			[self cleanUp];	// Make sure we recreate our objects for the new format.
 		
 		[self willChangeValueForKey: @"outputFilePath"];
-		[outputFilePath release];
 		outputFilePath = [inOutputFilePath copy];
 		
 		if( audioUnit && inOutputFilePath )
@@ -445,9 +449,7 @@ cleanUp:
 				[NSException raise: @"UKSoundFileRecorderBusyRecording" format: @"Can't change output format when recording has already started."];
 		}
 		
-		NSDictionary *oldFormat = outputFormat;
 		outputFormat = [inASBD copy];
-		[oldFormat release];
 		
 		[self cleanUp];	// Make sure we recreate our objects for the new format.
 	}
@@ -464,8 +466,7 @@ cleanUp:
 {
 	if( !actualOutputFormatDict )
 	{
-		[actualOutputFormatDict release];
-		actualOutputFormatDict = [UKDictionaryFromAudioStreamDescription( &actualOutputFormat ) retain];
+		actualOutputFormatDict = UKDictionaryFromAudioStreamDescription( &actualOutputFormat );
 	}
 	return actualOutputFormatDict;
 }
@@ -602,8 +603,7 @@ cleanUp:
 	
 	if( err == noErr && inDeviceUID != inputDeviceUID )
 	{
-		[inputDeviceUID release];
-		inputDeviceUID = [inDeviceUID retain];
+		inputDeviceUID = inDeviceUID;
 	}
 }
 
@@ -623,6 +623,12 @@ cleanUp:
 			return currDevice[UKSoundFileRecorderDeviceName];
 	}
 	return nil;
+}
+
+
+-(NSTimeInterval)	duration
+{
+	return currSeconds;
 }
 
 @end
@@ -700,7 +706,7 @@ cleanUp:
 	{
 		// Create new MP4 file (kAudioFileM4AType)
 		NSURL	*	theURL = outputFileURL.absoluteURL;
-		err = ExtAudioFileCreateWithURL( (CFURLRef)theURL,
+		err = ExtAudioFileCreateWithURL( (__bridge CFURLRef)theURL,
 							fileFormat,
 							&desiredOutputFormat,
 							NULL,
@@ -820,7 +826,6 @@ cleanUp:
 	// Select the default input device
 	if( inputDeviceID == kAudioObjectUnknown )	// Couldn't find it? Fall back to default input:
 	{
-		[inputDeviceUID release];
 		inputDeviceUID = nil;
 		param = sizeof(AudioDeviceID);
 		AudioObjectPropertyAddress theAddress = { kAudioHardwarePropertyDefaultInputDevice,
@@ -850,7 +855,7 @@ cleanUp:
 	// Setup render callback
 	// This will be called when the AUHAL has input data
 	callback.inputProc = AudioInputProc;
-	callback.inputProcRefCon = self;
+	callback.inputProcRefCon = (__bridge void*) self;
 	err = AudioUnitSetProperty( audioUnit, kAudioOutputUnitProperty_SetInputCallback, kAudioUnitScope_Global, 0, &callback, sizeof(AURenderCallbackStruct) );
 	if(err != noErr)
 	{
@@ -933,8 +938,7 @@ cleanUp:
 		[self cleanUp];
 		return [NSError errorWithDomain: NSOSStatusErrorDomain code: err userInfo: @{ NSLocalizedFailureReasonErrorKey: [NSString stringWithFormat: @"Could not retrieve the stream format of the output device (ID=%d)", err] }];
 	}
-	[actualOutputFormatDict release];	// Make sure next guy who asks for it gets a new lazily-allocated conversion.
-	actualOutputFormatDict = nil;
+	actualOutputFormatDict = nil;	// Make sure next guy who asks for it gets a new lazily-allocated conversion.
 	
 	if( deviceFormat.mChannelsPerFrame == 1 && audioChannels == 2 )
 	{

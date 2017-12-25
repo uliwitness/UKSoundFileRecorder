@@ -25,6 +25,14 @@
 //	   distribution.
 //
 
+#if !__has_feature(objc_arc)
+#error This file must be compiled with automated reference counting actimated.
+#endif
+
+// -----------------------------------------------------------------------------
+//	Headers:
+// -----------------------------------------------------------------------------
+
 #import "UKAudioStreamBasicDescription.h"
 
 
@@ -84,7 +92,7 @@ NSDictionary*	UKDictionaryFromAudioStreamDescription( const AudioStreamBasicDesc
 NSString*		UKStringFromAudioStreamFormatID( UInt32 streamFmt )
 {
 	streamFmt = EndianU32_BtoN(streamFmt);
-	return [[[NSString alloc] initWithBytes: &streamFmt length: 4 encoding: NSMacOSRomanStringEncoding] autorelease];
+	return [[NSString alloc] initWithBytes: &streamFmt length: 4 encoding: NSMacOSRomanStringEncoding];
 }
 
 
