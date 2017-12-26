@@ -108,3 +108,30 @@ UInt32			UKAudioStreamFormatIDFromString( NSString* streamFmt )
 	
 	return EndianU32_NtoB(buffer);
 }
+
+
+NSString * UKStringFromAudioFormatFlags( AudioFormatFlags inFlags )
+{
+	NSMutableString * fmtStr = [NSMutableString new];
+	
+	if( inFlags & kAudioFormatFlagIsFloat )
+		[fmtStr appendString: @"isFloat, "];
+	if( inFlags & kAudioFormatFlagIsBigEndian )
+		[fmtStr appendString: @"isBigEndian, "];
+	if( inFlags & kAudioFormatFlagIsSignedInteger )
+		[fmtStr appendString: @"isSignedInteger, "];
+	if( inFlags & kAudioFormatFlagIsPacked )
+		[fmtStr appendString: @"isPacked, "];
+	if( inFlags & kAudioFormatFlagIsAlignedHigh )
+		[fmtStr appendString: @"isAlignedHigh, "];
+	if( inFlags & kAudioFormatFlagIsNonInterleaved )
+		[fmtStr appendString: @"isNonInterleaved, "];
+	if( inFlags & kAudioFormatFlagIsNonMixable )
+		[fmtStr appendString: @"isNonMixable, "];
+	if( fmtStr.length > 0 )
+	{
+		[fmtStr deleteCharactersInRange: NSMakeRange( fmtStr.length -2, 2)];
+	}
+	return fmtStr;
+}
+

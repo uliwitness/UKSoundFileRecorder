@@ -48,7 +48,7 @@
 
 #define UKAudioStreamSampleRate						@"UKAudioStreamSampleRate"			// NSNumber containing a double (mSampleRate).
 #define UKAudioStreamFormat							@"UKAudioStreamFormat"				// NSString containing one of the formats below (mFormatID).
-#define UKAudioStreamFormatFlags					@"UKAudioStreamFormatFlags"			// NSNumber containing an unsigned int holding abitfield with format-specific flags (mFormatFlags).
+#define UKAudioStreamFormatFlags					@"UKAudioStreamFormatFlags"			// NSNumber containing an unsigned int holding abitfield with format-specific flags (AudioFormatFlags/mFormatFlags).
 #define UKAudioStreamBytesPerPacket					@"UKAudioStreamBytesPerPacket"		// NSNumber containing an unsigned int (mBytesPerPacket).
 #define UKAudioStreamFramesPerPacket				@"UKAudioStreamFramesPerPacket"		// NSNumber containing an unsigned int (mFramesPerPacket).
 #define UKAudioStreamBytesPerFrame					@"UKAudioStreamBytesPerFrame"		// NSNumber containing an unsigned int (mBytesPerFrame).
@@ -67,6 +67,8 @@ NSDictionary*	UKDictionaryFromAudioStreamDescription( const AudioStreamBasicDesc
 
 NSString*		UKStringFromAudioStreamFormatID( UInt32 streamFmt );
 UInt32			UKAudioStreamFormatIDFromString( NSString* streamFmt );
+
+NSString* 		UKStringFromAudioFormatFlags( AudioFormatFlags inFlags );	// Debug helper.
 
 
 // -----------------------------------------------------------------------------
