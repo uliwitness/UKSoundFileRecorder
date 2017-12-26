@@ -79,6 +79,8 @@
 	BOOL						delegateWantsLevels;
 	BOOL						canDoMetering;
 	BOOL						delegateWantsRawFrames;
+
+	Float32						currentLevel;
 }
 
 +(NSDictionary*)	defaultOutputFormat;

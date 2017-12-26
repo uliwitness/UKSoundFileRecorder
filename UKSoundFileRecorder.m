@@ -358,20 +358,25 @@ static OSStatus AudioInputProc( void* inRefCon, AudioUnitRenderActionFlags* ioAc
 		if( afr->delegateWantsRawFrames )
 			[afr->delegate soundFileRecorder: afr receivedFrames: afr->audioBuffer count: inNumberFrames seconds:afr->currSeconds];
 
-		float	currentLevel = 0;
-		if( afr->delegateWantsLevels && ioData != NULL )
+		if( afr->delegateWantsLevels )
 		{
+			if( inNumberFrames > 0 )
+				afr->currentLevel = 0;
+			
 			for( UInt32 f = 0; f < inNumberFrames; f++ )
 			{
-				for( UInt32 b = 0; b < ioData->mNumberBuffers; b++ )
+				for( UInt32 b = 0; b < afr->audioBuffer->mNumberBuffers; b++ )
 				{
-					currentLevel += *((float*)((uint8_t*)ioData->mBuffers[b].mData + f * sizeof(float))) / ioData->mNumberBuffers / inNumberFrames;
+					Float32 rawLevel = *((Float32*)((uint8_t*)afr->audioBuffer->mBuffers[b].mData + f * sizeof(Float32)));
+					rawLevel = fabs(rawLevel);
+					if( rawLevel > afr->currentLevel )
+						afr->currentLevel = rawLevel;
 				}
 			}
 		}
 		
 		if( afr->isRecording && (afr->delegateWantsTimeChanges || afr->delegateWantsLevels) )	// Don't waste time syncing to other threads if nobody is listening:
-			[afr performSelectorOnMainThread: @selector(notifyDelegateOfTimeChangeAndAmplitude:) withObject: [NSNumber numberWithFloat: currentLevel] waitUntilDone: NO];
+			[afr performSelectorOnMainThread: @selector(notifyDelegateOfTimeChangeAndAmplitude:) withObject: [NSNumber numberWithFloat: afr->currentLevel] waitUntilDone: NO];
 	}
 	
 cleanUp:
