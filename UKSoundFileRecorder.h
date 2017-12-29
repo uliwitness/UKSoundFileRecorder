@@ -150,7 +150,7 @@ extern NSString	*	UKSoundFileRecorderDeviceManufacturer;
 //	Notifications:
 // -----------------------------------------------------------------------------
 
-extern NSString*	UKSoundFileRecorderAvailableInputDevicesChangedNotification;
+extern NSString*	UKSoundFileRecorderAvailableInputDevicesChangedNotification;	// Notification object is NIL.
 
 
 // -----------------------------------------------------------------------------
