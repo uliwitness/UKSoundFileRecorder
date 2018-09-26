@@ -71,7 +71,8 @@
 	NSDictionary*				actualOutputFormatDict;
 	double						currSeconds;
 	UInt64						startHostTime;
-	
+	UInt64						pauseStartHostTime;
+
 	BOOL						isRecording;
 	
 	__weak NSObject<UKSoundFileRecorderDelegate> * delegate;
@@ -86,6 +87,8 @@
 +(NSDictionary*)	defaultOutputFormat;
 
 +(NSArray*)			availableInputDevices;	// NSArray of NSDictionaries. See below for the keys.
+
+@property (readonly) BOOL paused;
 
 //-(id)				init;	// Designated initializer. You can use -init and then do setOutputFilePath: or use -initWithOutputFilePath:.
 -(id)				initWithOutputFilePath: (NSString*)ofp;	
@@ -105,6 +108,7 @@
 
 // Recording:
 -(void)				start: (id)sender;
+-(void)				togglePause: (id)sender;
 -(BOOL)				isRecording;
 -(void)				stop: (id)sender;
 

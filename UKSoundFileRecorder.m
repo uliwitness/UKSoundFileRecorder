@@ -26,7 +26,7 @@
 //
 
 #if !__has_feature(objc_arc)
-#error This file must be compiled with automated reference counting actimated.
+#error This file must be compiled with automated reference counting activated.
 #endif
 
 // -----------------------------------------------------------------------------
@@ -63,7 +63,9 @@ static int32_t	UKInt32FromOSStatus( OSStatus inErr )
 //	Private method prototypes:
 // -----------------------------------------------------------------------------
 
-@interface UKSoundFileRecorder (UKSoundFileRecorderPrivateMethods)
+@interface UKSoundFileRecorder ()
+
+@property (readwrite) BOOL paused;
 
 -(void)				cleanUp;
 -(NSError*)			setupAudioFile;		// Returns error string, NIL on success.
@@ -322,6 +324,10 @@ static OSStatus AudioInputProc( void* inRefCon, AudioUnitRenderActionFlags* ioAc
 	{
 		UKSoundFileRecorder *	afr = (__bridge UKSoundFileRecorder*)inRefCon;
 
+		if (afr.paused) {
+			return noErr;
+		}
+		
 		// Render into audio buffer
 		err = AudioUnitRender( afr->audioUnit, ioActionFlags, inTimeStamp,
 								inBusNumber, inNumberFrames, afr->audioBuffer);
@@ -528,6 +534,7 @@ cleanUp:
 		[self prepare];
 	
 	// Start pulling audio data:
+	self.paused = NO;
 	startHostTime = AudioGetCurrentHostTime();
 	OSStatus err = AudioOutputUnitStart( audioUnit );
 	if( err == noErr )
@@ -544,6 +551,27 @@ cleanUp:
 	}
 	else
 		[NSException raise: @"UKSoundFileRecorderCantStart" format: @"Could not start recording (ID=%d)", err];
+}
+
+
+// -----------------------------------------------------------------------------
+//	togglePause:
+//		Pause recording sound, but be ready to unpause (on a second call) and
+//		resume recording immediately. Does not turn off the microphone, but
+//		rather just ignores incoming audio samples.
+// -----------------------------------------------------------------------------
+
+-(void) togglePause: (id)sender
+{
+	self.paused = !self.paused;
+	if (self.paused)
+	{
+		pauseStartHostTime = AudioGetCurrentHostTime();
+	}
+	else
+	{
+		startHostTime += AudioGetCurrentHostTime() -pauseStartHostTime;
+	}
 }
 
 
@@ -579,6 +607,8 @@ cleanUp:
 		
 		[self cleanUp];	// Make sure file gets flushed to disk.
 		[[NSWorkspace sharedWorkspace] noteFileSystemChanged: outputFilePath];	// Make sure Finder updates file size.
+		
+		self.paused = NO;
 	}
 }
 
@@ -636,11 +666,7 @@ cleanUp:
 	return currSeconds;
 }
 
-@end
-
-
-@implementation UKSoundFileRecorder (UKSoundFileRecorderPrivateMethods)
-
+#pragma mark - Private
 
 // -----------------------------------------------------------------------------
 //	cleanUp:
